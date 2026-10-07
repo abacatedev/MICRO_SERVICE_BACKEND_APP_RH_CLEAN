@@ -1,0 +1,53 @@
+services:
+  api:
+    build: .
+    env_file: .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./app:/srv/app
+      - ./scripts:/srv/scripts
+      - ./keys:/srv/keys
+    depends_on:
+      postgres:
+        condition: service_healthy
+      firebird:
+        condition: service_started
+
+  web:
+    image: node:22-alpine
+    working_dir: /web
+    environment:
+      API_TARGET: http://api:8000
+    volumes:
+      - ./web:/web
+    command: sh -c "npm install && npm run dev -- --host"
+    ports:
+      - "5173:5173"
+    depends_on:
+      - api
+
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: rh_auth
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d rh_auth"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  firebird:
+    image: jacobalberty/firebird:2.5-ss
+    environment:
+      ISC_PASSWORD: "${SIP_DB_SYSDBA_PASSWORD:-TroqueEstaSenha123}"
+    volumes:
+      - type: bind
+        source: "${SIP_DB_HOST_FILE:-/media/ademar/Novo volume/SIP_ANALISE_2.FDB}"
+        target: /firebird/data/SIP_ANALISE_2.FDB
+
+volumes:
+  pgdata:

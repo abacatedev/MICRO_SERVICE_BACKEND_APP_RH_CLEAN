@@ -1,0 +1,352 @@
+GET /rh/me:
+{
+  "sub": "1",
+  "email": "ademaralves@gmail.com",
+  "name": "Ademar Alves Trindade",
+  "roles": [
+    "admin"
+  ],
+  "permissions": [
+    "rh:auditoria:ler",
+    "rh:dependentes:ler",
+    "rh:servidores:detalhar",
+    "rh:servidores:listar",
+    "rh:usuarios:gerenciar"
+  ],
+  "exp": 1791328205
+}
+
+
+GET /rh/servidores?nome=oliveira&situacao=1:
+{
+  "total": 1,
+  "pagina": 1,
+  "limite": 50,
+  "itens": [
+    {
+      "REGISTRO": "028013",
+      "MATRICULA": 9810,
+      "CONTRATO": 2,
+      "NOME": "ADEMAR ALVES TRINDADE",
+      "CPF": "70023794100",
+      "SITUACAO": "1",
+      "VINCULO": "02",
+      "CARGOATUAL": "0058",
+      "DIVISAO": "000003",
+      "SUBDIVISAO": "003001",
+      "LOCAL_TRABALHO": "000165",
+      "DTADMISSAO": "2025-04-16",
+      "DTDEMISSAO": null
+    }
+  ]
+}
+POST /rh/admin/usuarios
+
+{
+  "email": "~`,>Uq9'Xv`a,\\[iX8MQU=*#H/\"7oY:Uj>2e?#hglo[\\(z~B6miQYR@PtG\"D>,4G6{CgnYZT,zsg\"is;/~]-.HL=[DBzkT67P;i=tM1dgll[|i]|Ke}X[\"G#O.Z&J{#n,,h/#fB=>#[,F?m0$F>.-73GV<OzR}.V8^+s|Idq*3N|~d^4C+hb>ZG",
+  "nome": "string",
+  "role": "string"
+}
+
+curl -X 'POST' \
+  'http://localhost:8000/rh/admin/usuarios' \
+  -H 'accept: */*' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "email": "~`,>Uq9'\''Xv`a,\\[iX8MQU=*#H/\"7oY:Uj>2e?#hglo[\\(z~B6miQYR@PtG\"D>,4G6{CgnYZT,zsg\"is;/~]-.HL=[DBzkT67P;i=tM1dgll[|i]|Ke}X[\"G#O.Z&J{#n,,h/#fB=>#[,F?m0$F>.-73GV<OzR}.V8^+s|Idq*3N|~d^4C+hb>ZG",
+  "nome": "string",
+  "role": "string"
+}'
+
+
+
+GET /rh/admin/auditoria:
+{
+  "total": 3,
+  "pagina": 1,
+  "limite": 100,
+  "itens": [
+    {
+      "id": 3,
+      "quando": "2026-10-06T22:56:58.439449+00:00",
+      "usuario_id": 1,
+      "usuario_email": "ademaralves@gmail.com",
+      "acao": "servidores.listar",
+      "alvo": null,
+      "detalhe": {
+        "nome": "ademar",
+        "situacao": "1",
+        "pagina": 1,
+        "limite": 50
+      },
+      "ip": "172.26.0.1"
+    },
+    {
+      "id": 2,
+      "quando": "2026-10-06T22:55:21.496614+00:00",
+      "usuario_id": 1,
+      "usuario_email": "ademaralves@gmail.com",
+      "acao": "servidores.listar",
+      "alvo": null,
+      "detalhe": {
+        "nome": null,
+        "situacao": null,
+        "pagina": 1,
+        "limite": 5
+      },
+      "ip": "172.26.0.1"
+    },
+    {
+      "id": 1,
+      "quando": "2026-10-06T22:55:05.791102+00:00",
+      "usuario_id": 1,
+      "usuario_email": "ademaralves@gmail.com",
+      "acao": "login.sucesso",
+      "alvo": null,
+      "detalhe": {
+        "client_id": "rh"
+      },
+      "ip": "172.26.0.1"
+    }
+  ]
+}
+*********************************
+curl -X 'POST' \
+  'http://localhost:8000/rh/admin/usuarios' \
+  -H 'accept: */*' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "email": "ademar.alves@unemat.br",
+  "nome": "Ademar Alves Trindade",
+  "role": "consulta"
+}'
+
+{
+  "id": 2,
+  "email": "ademar.alves@unemat.br",
+  "nome": "Ademar Alves Trindade",
+  "role": "consulta",
+  "ativo": true,
+  "ja_entrou": false,
+  "ultimo_login": null,
+  "criado_em": "2026-10-06T23:09:30.690401+00:00"
+}
+
+http://localhost:8000/rh/callback?error=access_denied&state=DZpo-PIUWDpDwAMgU89jUiC8gfGkbs8Ysa-d6AstOjE
+{"detail":"Acesso negado"}
+
+
+http://localhost:8000/rh/me
+{
+  "sub": "2",
+  "email": "ademar.alves@unemat.br",
+  "name": "ADEMAR ALVES TRINDADE",
+  "roles": [
+    "consulta"
+  ],
+  "permissions": [
+    "rh:servidores:listar"
+  ],
+  "exp": 1791329448
+}
+
+
+http://localhost:8000/rh/servidores?nome=ademar
+{"total":16,"pagina":1,"limite":50,"itens":[{"REGISTRO":"012839","MATRICULA":9810,"CONTRATO":1,"NOME":"ADEMAR ALVES TRINDADE","SITUACAO":"6","VINCULO":"03","CARGOATUAL":"0012","DIVISAO":"000007","SUBDIVISAO":"006003","LOCAL_TRABALHO":"000000","DTADMISSAO":"2010-02-03","DTDEMISSAO":"2010-04-30"},{"REGISTRO":"028013","MATRICULA":9810,"CONTRATO":2,"NOME":"ADEMAR ALVES TRINDADE","SITUACAO":"1","VINCULO":"02","CARGOATUAL":"0058","DIVISAO":"000003","SUBDIVISAO":"003001","LOCAL_TRABALHO":"000165","DTADMISSAO":"2025-04-16","DTDEMISSAO":null},{"REGISTRO":"008421","MATRICULA":44,"CONTRATO":1,"NOME":"ADEMAR CARDOSO","SITUACAO":"6","VINCULO":"03","CARGOATUAL":"0006","DIVISAO":"000098","SUBDIVISAO":"000001","LOCAL_TRABALHO":"000000","DTADMISSAO":"2005-03-21","DTDEMISSAO":"2005-12-15"},{"REGISTRO":"007222","MATRICULA":45,"CONTRATO":1,"NOME":"ADEMAR DA COSTA SILVA","SITUACAO":"6","VINCULO":"03","CARGOATUAL":"0006","DIVISAO":"000008","SUBDIVISAO":"007001","LOCAL_TRABALHO":"000000","DTADMISSAO":"2004-02-03","DTDEMISSAO":"2004-05-03"},{"REGISTRO":"002384","MATRICULA":46,"CONTRATO":1,"NOME":"ADEMAR DE MATOS SOUSA","SITUACAO":"6","VINCULO":"03","CARGOATUAL":"0010","DIVISAO":"000007","SUBDIVISAO":"006003","LOCAL_TRABALHO":"000000","DTADMISSAO":"1997-03-20","DTDEMISSAO":"1997-12-31"},{"REGISTRO":"002790","MATRICULA":47,"CONTRATO":1,"NOME":"ADEMAR LEONEL BARBOSA","SITUACAO":"6","VINCULO":"03","CARGOATUAL":"0011","DIVISAO":"000007","SUBDIVISAO":"006001","LOCAL_TRABALHO":"000000","DTADMISSAO":"1998-02-09","DTDEMISSAO":"1998-12-31"},{"REGISTRO":"004803","MATRICULA":48,"CONTRATO":1,"NOME":"ADEMAR RAMOS DE 
+
+
+http://localhost:8000/rh/servidores/28013
+{"detail":"Sem permissão"}
+
+
+
+http://localhost:8000/rh/me
+{
+  "sub": "1",
+  "email": "ademaralves@gmail.com",
+  "name": "Ademar Alves Trindade",
+  "roles": [
+    "admin"
+  ],
+  "permissions": [
+    "rh:auditoria:ler",
+    "rh:dependentes:ler",
+    "rh:servidores:detalhar",
+    "rh:servidores:listar",
+    "rh:usuarios:gerenciar"
+  ],
+  "exp": 1791329560
+}
+
+{
+  "total": 8,
+  "pagina": 1,
+  "limite": 100,
+  "itens": [
+    {
+      "id": 8,
+      "quando": "2026-10-06T23:17:40.915761+00:00",
+      "usuario_id": 1,
+      "usuario_email": "ademaralves@gmail.com",
+      "acao": "login.sucesso",
+      "alvo": null,
+      "detalhe": {
+        "client_id": "rh"
+      },
+      "ip": "172.26.0.1"
+    },
+    {
+      "id": 7,
+      "quando": "2026-10-06T23:16:13.166368+00:00",
+      "usuario_id": 2,
+      "usuario_email": "ademar.alves@unemat.br",
+      "acao": "servidores.listar",
+      "alvo": null,
+      "detalhe": {
+        "nome": "ademar",
+        "situacao": null,
+        "pagina": 1,
+        "limite": 50
+      },
+      "ip": "172.26.0.1"
+    },
+    {
+      "id": 6,
+      "quando": "2026-10-06T23:15:48.892632+00:00",
+      "usuario_id": 2,
+      "usuario_email": "ademar.alves@unemat.br",
+      "acao": "login.sucesso",
+      "alvo": null,
+      "detalhe": {
+        "client_id": "rh"
+      },
+      "ip": "172.26.0.1"
+    },
+    {
+      "id": 5,
+      "quando": "2026-10-06T23:13:54.601185+00:00",
+      "usuario_id": null,
+      "usuario_email": "botfipe@gmail.com",
+      "acao": "login.negado",
+      "alvo": null,
+      "detalhe": {
+        "client_id": "rh"
+      },
+      "ip": "172.26.0.1"
+    },
+    {
+      "id": 4,
+      "quando": "2026-10-06T23:09:30.699109+00:00",
+      "usuario_id": 1,
+      "usuario_email": "ademaralves@gmail.com",
+      "acao": "usuarios.criar",
+      "alvo": "2",
+      "detalhe": {
+        "email": "ademar.alves@unemat.br",
+        "role": "consulta"
+      },
+      "ip": "172.26.0.1"
+    },
+    {
+      "id": 3,
+      "quando": "2026-10-06T22:56:58.439449+00:00",
+      "usuario_id": 1,
+      "usuario_email": "ademaralves@gmail.com",
+      "acao": "servidores.listar",
+      "alvo": null,
+      "detalhe": {
+        "nome": "ademar",
+        "situacao": "1",
+        "pagina": 1,
+        "limite": 50
+      },
+      "ip": "172.26.0.1"
+    },
+    {
+      "id": 2,
+      "quando": "2026-10-06T22:55:21.496614+00:00",
+      "usuario_id": 1,
+      "usuario_email": "ademaralves@gmail.com",
+      "acao": "servidores.listar",
+      "alvo": null,
+      "detalhe": {
+        "nome": null,
+        "situacao": null,
+        "pagina": 1,
+        "limite": 5
+      },
+      "ip": "172.26.0.1"
+    },
+    {
+      "id": 1,
+      "quando": "2026-10-06T22:55:05.791102+00:00",
+      "usuario_id": 1,
+      "usuario_email": "ademaralves@gmail.com",
+      "acao": "login.sucesso",
+      "alvo": null,
+      "detalhe": {
+        "client_id": "rh"
+      },
+      "ip": "172.26.0.1"
+    }
+  ]
+}
+
+
+************************************************
+curl -X 'GET' \
+  'http://localhost:8000/rh/admin/sessoes?somente_ativas=true' \
+  -H 'accept: */*'
+
+
+ [
+  {
+    "id": 1,
+    "usuario_id": 1,
+    "usuario_email": "ademaralves@gmail.com",
+    "usuario_nome": "Ademar Alves Trindade",
+    "ativa": true,
+    "criada_em": "2026-10-06T23:34:13.648837+00:00",
+    "ultimo_uso": "2026-10-06T23:35:36.722477+00:00",
+    "expira_em": "2026-10-07T07:34:13.647942+00:00",
+    "encerrada_em": null,
+    "ip": "172.26.0.1",
+    "navegador": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36"
+  },
+  {
+    "id": 2,
+    "usuario_id": 2,
+    "usuario_email": "ademar.alves@unemat.br",
+    "usuario_nome": "ADEMAR ALVES TRINDADE",
+    "ativa": true,
+    "criada_em": "2026-10-06T23:35:29.696101+00:00",
+    "ultimo_uso": "2026-10-06T23:35:29.696102+00:00",
+    "expira_em": "2026-10-07T07:35:29.695885+00:00",
+    "encerrada_em": null,
+    "ip": "172.26.0.1",
+    "navegador": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36"
+  }
+]
+
+
+
+curl -X 'DELETE' \
+  'http://localhost:8000/rh/admin/sessoes/2' \
+  -H 'accept: */*'
+
+
+
+  {
+  "encerradas": 1
+}
+
+http://localhost:8000/rh/me
+{"detail":"Sessão expirada"}
+
+
+http://localhost:8000/
+{"status":"ok"}
+
+
+http://localhost:8000/rh/me
+{"detail":"Não autenticado"}

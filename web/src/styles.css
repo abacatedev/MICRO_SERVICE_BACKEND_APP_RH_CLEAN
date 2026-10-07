@@ -1,0 +1,135 @@
+/* Identidade: papel claro, tinta petróleo e o verde do rio Paraguai como cor de ação.
+   Vermelho, âmbar e azul aparecem só para dizer gravidade. Tabelas em vez de cartões:
+   o conteúdo é um livro de registro, e a régua de proporção é o único elemento de destaque. */
+:root {
+  --papel: #fbfcfa;
+  --tinta: #1b2a2f;
+  --tinta-suave: #55666b;
+  --linha: #dde3dc;
+  --rio: #0e5a52;
+  --rio-claro: #e3efec;
+  --erro: #b3261e;
+  --erro-claro: #f8e5e3;
+  --alerta: #a35f00;
+  --alerta-claro: #f8ecd6;
+  --recadastro: #1f5fa8;
+  --recadastro-claro: #e2ecf7;
+  --neutro: #6b7a7e;
+  --neutro-claro: #e9edea;
+  --ok: #7fae9a;
+}
+* { box-sizing: border-box; }
+html { font-size: 16px; }
+body {
+  margin: 0;
+  background: var(--papel);
+  color: var(--tinta);
+  font-family: "Public Sans Variable", "Segoe UI", system-ui, sans-serif;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+a { color: var(--rio); text-underline-offset: 3px; }
+a:focus-visible, button:focus-visible, input:focus-visible { outline: 3px solid var(--rio); outline-offset: 2px; }
+h1 { font-size: 2rem; line-height: 1.15; font-weight: 650; letter-spacing: -0.015em; margin: 0 0 1.25rem; max-width: 24ch; }
+h2 { font-size: 1.25rem; font-weight: 650; margin: 0; }
+main { max-width: 1080px; margin: 0 auto; padding: 2.5rem 1.5rem 4rem; }
+section { margin-bottom: 3rem; }
+
+.topo {
+  display: flex; justify-content: space-between; align-items: center; gap: 1rem;
+  padding: 0.9rem 1.5rem; border-bottom: 1px solid var(--linha); background: #fff;
+}
+.marca { font-weight: 650; color: var(--tinta); text-decoration: none; line-height: 1.2; }
+.marca span, .conta span { display: block; font-weight: 400; font-size: 0.8125rem; color: var(--tinta-suave); }
+.conta { display: flex; align-items: center; gap: 1rem; text-align: right; font-size: 0.875rem; }
+
+.botao {
+  display: inline-block; font: inherit; font-size: 0.9375rem; font-weight: 550; cursor: pointer;
+  padding: 0.55rem 1rem; border-radius: 4px; border: 1px solid var(--rio); text-decoration: none;
+}
+.botao.principal { background: var(--rio); color: #fff; }
+.botao.principal:hover { background: #0a4640; }
+.botao.discreto { background: transparent; color: var(--rio); border-color: var(--linha); padding: 0.35rem 0.75rem; font-size: 0.875rem; }
+.botao.discreto:hover { border-color: var(--rio); }
+.botao:disabled { opacity: 0.6; cursor: default; }
+
+.regua { display: flex; height: 1.75rem; gap: 2px; }
+.regua span { min-width: 3px; }
+.regua .erro, .legenda i.erro, .barra.erro { background: var(--erro); }
+.regua .alerta, .legenda i.alerta, .barra.alerta { background: var(--alerta); }
+.regua .ok, .legenda i.ok { background: var(--ok); }
+.barra.recadastro { background: var(--recadastro); }
+.barra.conferencia, .barra.indicador { background: var(--neutro); }
+.legenda { list-style: none; display: flex; flex-wrap: wrap; gap: 0.5rem 2rem; padding: 0; margin: 0.75rem 0 0; font-size: 0.9375rem; }
+.legenda i { display: inline-block; width: 0.75rem; height: 0.75rem; margin-right: 0.4rem; }
+.legenda span { color: var(--tinta-suave); margin-left: 0.25rem; }
+.regua-celula { width: 34%; }
+.regua-celula .regua { height: 0.75rem; }
+
+.rodape-abertura { color: var(--tinta-suave); font-size: 0.875rem; margin: 1.25rem 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; }
+.acoes { display: inline-flex; gap: 0.5rem; margin-left: auto; }
+.sub, .texto { color: var(--tinta-suave); margin: 0.25rem 0 1rem; max-width: 70ch; }
+.nota { color: var(--tinta-suave); font-size: 0.8125rem; max-width: 80ch; }
+.aviso { color: var(--tinta-suave); padding: 3rem 1.5rem; text-align: center; }
+.trilha { font-size: 0.875rem; color: var(--tinta-suave); margin: 0 0 1rem; }
+
+.livro { width: 100%; border-collapse: collapse; font-size: 0.9375rem; }
+.livro th { text-align: left; font-weight: 550; font-size: 0.8125rem; color: var(--tinta-suave); padding: 0.5rem 0.75rem; border-bottom: 2px solid var(--tinta); }
+.livro td { padding: 0.75rem; border-bottom: 1px solid var(--linha); vertical-align: top; }
+.livro tbody tr:hover { background: #f3f6f2; }
+.livro .n { text-align: right; white-space: nowrap; }
+.livro.denso td { padding: 0.5rem 0.75rem; font-size: 0.875rem; }
+/* O registro é a chave que o RH usa no SIP: fica em destaque e fácil de copiar */
+.registro { font-weight: 650; white-space: nowrap; letter-spacing: 0.02em; }
+.sem-quebra { white-space: nowrap; }
+.fraco { color: var(--tinta-suave); font-weight: 400; }
+.bloco { display: block; font-size: 0.8125rem; }
+.titulo-regra { display: flex; align-items: baseline; gap: 0.6rem; flex-wrap: wrap; font-weight: 550; }
+.descricao { margin: 0.2rem 0 0; color: var(--tinta-suave); font-size: 0.875rem; max-width: 62ch; }
+.barra-celula { width: 22%; vertical-align: middle !important; }
+.barra { display: block; height: 0.6rem; min-width: 2px; }
+.rolagem { overflow-x: auto; }
+
+.etiqueta { font-size: 0.75rem; font-weight: 600; padding: 0.1rem 0.45rem; border-radius: 3px; white-space: nowrap; }
+.etiqueta.erro { background: var(--erro-claro); color: var(--erro); }
+.etiqueta.alerta { background: var(--alerta-claro); color: var(--alerta); }
+.etiqueta.recadastro { background: var(--recadastro-claro); color: var(--recadastro); }
+.etiqueta.conferencia, .etiqueta.indicador { background: var(--neutro-claro); color: var(--neutro); }
+
+.caixa { padding: 0.75rem 1rem; border-left: 4px solid; margin: 1rem 0; max-width: 70ch; }
+.caixa.erro { border-color: var(--erro); background: var(--erro-claro); }
+.caixa.orientacao { border-color: var(--rio); background: var(--rio-claro); }
+
+.ferramentas { display: flex; flex-wrap: wrap; gap: 0.75rem; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+.ferramentas label { flex: 1 1 18rem; }
+.ferramentas input { width: 100%; font: inherit; padding: 0.55rem 0.75rem; border: 1px solid var(--neutro); border-radius: 4px; background: #fff; color: var(--tinta); }
+.so-leitor { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+
+.entrada { max-width: 30rem; margin: 12vh auto 0; padding: 0 1.5rem; }
+.entrada p { color: var(--tinta-suave); }
+.entrada .botao { margin: 0.75rem 0; }
+
+@media (max-width: 720px) {
+  h1 { font-size: 1.5rem; }
+  .barra-celula, .regua-celula { display: none; }
+  .conta strong { display: none; }
+}
+@media print {
+  .topo, .nao-imprimir { display: none !important; }
+  main { padding: 0; max-width: none; }
+  body { background: #fff; font-size: 11pt; }
+  .regua span, .barra, .legenda i, .etiqueta { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  section { break-inside: avoid; margin-bottom: 1.5rem; }
+}
+
+/* Lista da regra: marcações do SIP, campo faltando e painel "Ver tudo" */
+.marca-sip { display: inline-block; font-size: 0.75rem; padding: 0.05rem 0.4rem; margin: 0 0.25rem 0.2rem 0; border: 1px solid var(--rio); color: var(--rio); border-radius: 3px; white-space: nowrap; }
+.falta { color: var(--erro); font-weight: 550; }
+.botao.ver { display: block; margin-top: 0.35rem; padding: 0.15rem 0.5rem; font-size: 0.8125rem; }
+.livro tr.aberta { background: var(--rio-claro); }
+.linha-detalhes td { background: #f3f6f2; padding: 1rem 1.25rem 1.25rem !important; }
+.detalhes { display: grid; grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr)); gap: 1.5rem 2.5rem; }
+.detalhes h3 { font-size: 0.9375rem; font-weight: 650; margin: 0 0 0.5rem; padding-bottom: 0.3rem; border-bottom: 1px solid var(--tinta); }
+.detalhes dl { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: 0.6rem 1.25rem; margin: 0; }
+.detalhes dt { font-size: 0.75rem; color: var(--tinta-suave); }
+.detalhes dd { margin: 0; font-size: 0.875rem; overflow-wrap: anywhere; }
