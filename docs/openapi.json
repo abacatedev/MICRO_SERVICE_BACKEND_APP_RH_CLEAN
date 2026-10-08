@@ -1,0 +1,3337 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Pré-Censo dos Servidores: API do RH",
+    "description": "\nDiagnóstico cadastral dos servidores e dependentes da Prefeitura de Cáceres (Pré-Censo),\na partir de uma cópia de análise do SIP. **A API só lê o SIP.**\n\n## Como autenticar\n\n**Pelo navegador (recomendado para frontends).** Envie a pessoa para\n`GET /rh/login?retorno=http://localhost:3000/`. Depois do Google, ela volta para o seu\nfrontend com a sessão aberta em cookie HttpOnly (8 horas). Nas chamadas, use\n`fetch(url, { credentials: \"include\" })`.\n\n**Por token.** Com a sessão aberta, `GET /rh/token` devolve um JWT RS256 de 15 minutos.\nEnvie em `Authorization: Bearer <token>`. Quando vencer, peça outro na mesma rota.\n\n**Neste Swagger.** Entre antes por [/rh/login](/rh/login) na mesma janela; as rotas passam a\nresponder com o seu usuário. O botão **Authorize** aceita um token de `GET /rh/token`.\n\n## Respostas de erro\n\n| Código | Significado |\n|---|---|\n| 401 | Sem sessão ou token, ou sessão expirada. Refaça o login. |\n| 403 | Autenticado, mas sem a permissão da rota, ou acesso revogado. |\n| 404 | Registro, regra ou domínio inexistente. |\n| 422 | Parâmetro inválido. |\n\nO `registro` aceita `3` ou `000003`. Datas vêm em ISO 8601; nas listas do diagnóstico, já em `dd/mm/aaaa`.\n",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/auth/google": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Iniciar o login no Google para uma aplicação cliente",
+        "description": "**Acesso:** pública\n\nPasso 2: valida cliente e redirect_uri ANTES de ir ao Google.",
+        "operationId": "login_auth_google_get",
+        "parameters": [
+          {
+            "name": "client_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Client Id"
+            }
+          },
+          {
+            "name": "redirect_uri",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Redirect Uri"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
+          }
+        ],
+        "responses": {
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "302": {
+            "description": "Redireciona. Abra no navegador; não use fetch nem o Try it out."
+          }
+        }
+      }
+    },
+    "/auth/google/callback": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Retorno do Google (uso interno do fluxo)",
+        "description": "**Acesso:** pública\n\nPassos 5 a 8: identidade -> acesso -> authorization code -> volta ao cliente.",
+        "operationId": "callback_auth_google_callback_get",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Code"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
+          }
+        ],
+        "responses": {
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "302": {
+            "description": "Redireciona. Abra no navegador; não use fetch nem o Try it out."
+          }
+        }
+      }
+    },
+    "/oauth/token": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Trocar o código de autorização por um JWT",
+        "description": "**Acesso:** client_secret da aplicação\n\nPassos 9 a 12: client_id + client_secret + code -> JWT RS256.",
+        "operationId": "token_oauth_token_post",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_token_oauth_token_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Token"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/.well-known/jwks.json": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Chave pública para validar os tokens",
+        "operationId": "jwks_endpoint__well_known_jwks_json_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "description": "**Acesso:** pública"
+      }
+    },
+    "/rh/login": {
+      "get": {
+        "tags": [
+          "rh"
+        ],
+        "summary": "Entrar com o Google",
+        "operationId": "login_rh_login_get",
+        "parameters": [
+          {
+            "name": "retorno",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Para onde voltar depois do login. Precisa ser um frontend de CORS_ORIGINS.",
+              "title": "Retorno"
+            },
+            "description": "Para onde voltar depois do login. Precisa ser um frontend de CORS_ORIGINS."
+          }
+        ],
+        "responses": {
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "302": {
+            "description": "Redireciona. Abra no navegador; não use fetch nem o Try it out."
+          }
+        },
+        "description": "**Acesso:** pública"
+      }
+    },
+    "/rh/callback": {
+      "get": {
+        "tags": [
+          "rh"
+        ],
+        "summary": "Retorno do login (uso interno do fluxo)",
+        "operationId": "callback_rh_callback_get",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Code"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
+          },
+          {
+            "name": "error",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Error"
+            }
+          }
+        ],
+        "responses": {
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "302": {
+            "description": "Redireciona. Abra no navegador; não use fetch nem o Try it out."
+          }
+        },
+        "description": "**Acesso:** pública"
+      }
+    },
+    "/rh/logout": {
+      "get": {
+        "tags": [
+          "rh"
+        ],
+        "summary": "Sair e encerrar a sessão",
+        "operationId": "logout_rh_logout_get",
+        "parameters": [
+          {
+            "name": "retorno",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Para onde voltar depois de sair.",
+              "title": "Retorno"
+            },
+            "description": "Para onde voltar depois de sair."
+          }
+        ],
+        "responses": {
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "302": {
+            "description": "Redireciona. Abra no navegador; não use fetch nem o Try it out."
+          }
+        },
+        "description": "**Acesso:** pública"
+      }
+    },
+    "/rh/me": {
+      "get": {
+        "tags": [
+          "rh"
+        ],
+        "summary": "Usuário atual, perfis e permissões",
+        "operationId": "me_rh_me_get",
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Usuario"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado ou sessão expirada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          }
+        },
+        "description": "**Acesso:** qualquer usuário autenticado",
+        "security": [
+          {
+            "sessao": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/rh/token": {
+      "get": {
+        "tags": [
+          "rh"
+        ],
+        "summary": "Obter um token de acesso a partir da sessão",
+        "description": "**Acesso:** qualquer usuário autenticado\n\nToken de acesso (JWT RS256, 15 min) para quem está com a sessão aberta.\n\nPara frontends que preferem enviar `Authorization: Bearer` em vez de depender do cookie.\nQuando vencer, basta chamar esta rota de novo: a sessão emite outro.",
+        "operationId": "token_rh_token_get",
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Token"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado ou sessão expirada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessao": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/rh/dominios/{nome}": {
+      "get": {
+        "tags": [
+          "rh"
+        ],
+        "summary": "Códigos e nomes para filtros",
+        "description": "**Permissão:** `rh:servidores:listar`\n\nCódigos e nomes de uma tabela de domínio, para filtros e caixas de seleção.",
+        "operationId": "listar_dominio_rh_dominios__nome__get",
+        "parameters": [
+          {
+            "name": "nome",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Nome"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Dominio"
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado ou sessão expirada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessao": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/rh/servidores": {
+      "get": {
+        "tags": [
+          "rh"
+        ],
+        "summary": "Buscar servidores",
+        "operationId": "listar_servidores_rh_servidores_get",
+        "parameters": [
+          {
+            "name": "nome",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 2
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Trecho do nome",
+              "title": "Nome"
+            },
+            "description": "Trecho do nome"
+          },
+          {
+            "name": "situacao",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 2
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Código SITUACAO (1 = Normal)",
+              "title": "Situacao"
+            },
+            "description": "Código SITUACAO (1 = Normal)"
+          },
+          {
+            "name": "ativos",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Só vínculos ativos (Normal e Afastado)",
+              "default": false,
+              "title": "Ativos"
+            },
+            "description": "Só vínculos ativos (Normal e Afastado)"
+          },
+          {
+            "name": "limite",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limite"
+            }
+          },
+          {
+            "name": "pagina",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Pagina"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListaServidores"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado ou sessão expirada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          }
+        },
+        "description": "**Permissão:** `rh:servidores:listar`",
+        "security": [
+          {
+            "sessao": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/rh/servidores/{registro}": {
+      "get": {
+        "tags": [
+          "rh"
+        ],
+        "summary": "Dados de um servidor",
+        "operationId": "obter_servidor_rh_servidores__registro__get",
+        "parameters": [
+          {
+            "name": "registro",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Registro"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado ou sessão expirada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          }
+        },
+        "description": "**Permissão:** `rh:servidores:detalhar`",
+        "security": [
+          {
+            "sessao": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/rh/servidores/{registro}/dependentes": {
+      "get": {
+        "tags": [
+          "rh"
+        ],
+        "summary": "Dependentes de um registro",
+        "operationId": "listar_dependentes_rh_servidores__registro__dependentes_get",
+        "parameters": [
+          {
+            "name": "registro",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Registro"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado ou sessão expirada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          }
+        },
+        "description": "**Permissão:** `rh:dependentes:ler`",
+        "security": [
+          {
+            "sessao": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/rh/admin/roles": {
+      "get": {
+        "tags": [
+          "rh-admin"
+        ],
+        "summary": "Perfis e o que cada um pode",
+        "operationId": "listar_roles_rh_admin_roles_get",
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Perfil"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado ou sessão expirada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          }
+        },
+        "description": "**Permissão:** `rh:usuarios:gerenciar`",
+        "security": [
+          {
+            "sessao": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/rh/admin/usuarios": {
+      "get": {
+        "tags": [
+          "rh-admin"
+        ],
+        "summary": "Listar usuários",
+        "operationId": "listar_usuarios_rh_admin_usuarios_get",
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UsuarioAdmin"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado ou sessão expirada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          }
+        },
+        "description": "**Permissão:** `rh:usuarios:gerenciar`",
+        "security": [
+          {
+            "sessao": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "rh-admin"
+        ],
+        "summary": "Pré-cadastrar um usuário pelo e-mail",
+        "description": "**Permissão:** `rh:usuarios:gerenciar`\n\nPré-cadastro: a pessoa entra com a conta Google deste e-mail.",
+        "operationId": "criar_usuario_rh_admin_usuarios_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UsuarioNovo"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuarioAdmin"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado ou sessão expirada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessao": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/rh/admin/usuarios/{user_id}": {
+      "patch": {
+        "tags": [
+          "rh-admin"
+        ],
+        "summary": "Alterar nome, perfil ou situação",
+        "operationId": "alterar_usuario_rh_admin_usuarios__user_id__patch",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UsuarioAlteracao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuarioAdmin"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado ou sessão expirada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          }
+        },
+        "description": "**Permissão:** `rh:usuarios:gerenciar`",
+        "security": [
+          {
+            "sessao": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/rh/admin/sessoes": {
+      "get": {
+        "tags": [
+          "rh-admin"
+        ],
+        "summary": "Sessões abertas",
+        "operationId": "listar_sessoes_rh_admin_sessoes_get",
+        "parameters": [
+          {
+            "name": "somente_ativas",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "title": "Somente Ativas"
+            }
+          },
+          {
+            "name": "usuario_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Usuario Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Sessao"
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado ou sessão expirada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          }
+        },
+        "description": "**Permissão:** `rh:usuarios:gerenciar`",
+        "security": [
+          {
+            "sessao": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/rh/admin/sessoes/{sessao_id}": {
+      "delete": {
+        "tags": [
+          "rh-admin"
+        ],
+        "summary": "Encerrar uma sessão",
+        "operationId": "encerrar_sessao_rh_admin_sessoes__sessao_id__delete",
+        "parameters": [
+          {
+            "name": "sessao_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Sessao Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Encerradas"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado ou sessão expirada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          }
+        },
+        "description": "**Permissão:** `rh:usuarios:gerenciar`",
+        "security": [
+          {
+            "sessao": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/rh/admin/usuarios/{user_id}/sessoes": {
+      "delete": {
+        "tags": [
+          "rh-admin"
+        ],
+        "summary": "Encerrar todas as sessões de um usuário",
+        "operationId": "encerrar_sessoes_do_usuario_rh_admin_usuarios__user_id__sessoes_delete",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Encerradas"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado ou sessão expirada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          }
+        },
+        "description": "**Permissão:** `rh:usuarios:gerenciar`",
+        "security": [
+          {
+            "sessao": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/rh/admin/auditoria": {
+      "get": {
+        "tags": [
+          "rh-admin"
+        ],
+        "summary": "Consultar a auditoria",
+        "operationId": "listar_auditoria_rh_admin_auditoria_get",
+        "parameters": [
+          {
+            "name": "usuario_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Usuario Id"
+            }
+          },
+          {
+            "name": "acao",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Ex.: servidores.detalhar ou prefixo 'usuarios.'",
+              "title": "Acao"
+            },
+            "description": "Ex.: servidores.detalhar ou prefixo 'usuarios.'"
+          },
+          {
+            "name": "alvo",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "REGISTRO do servidor ou id do usuário",
+              "title": "Alvo"
+            },
+            "description": "REGISTRO do servidor ou id do usuário"
+          },
+          {
+            "name": "de",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "De"
+            }
+          },
+          {
+            "name": "ate",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ate"
+            }
+          },
+          {
+            "name": "limite",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limite"
+            }
+          },
+          {
+            "name": "pagina",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Pagina"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Auditoria"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado ou sessão expirada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          }
+        },
+        "description": "**Permissão:** `rh:auditoria:ler`",
+        "security": [
+          {
+            "sessao": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/rh/diagnostico": {
+      "get": {
+        "tags": [
+          "rh-diagnostico"
+        ],
+        "summary": "Painel do diagnóstico",
+        "description": "**Permissão:** `rh:diagnostico:painel`\n\nContagem por regra: quantos servidores e quantas ocorrências.",
+        "operationId": "painel_rh_diagnostico_get",
+        "parameters": [
+          {
+            "name": "atualizar",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Atualizar"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Painel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado ou sessão expirada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessao": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/rh/diagnostico/por-divisao": {
+      "get": {
+        "tags": [
+          "rh-diagnostico"
+        ],
+        "summary": "Situação dos vínculos por secretaria",
+        "description": "**Permissão:** `rh:diagnostico:painel`\n\nSituação dos vínculos em cada secretaria (DIVISAO), da pior para a melhor.",
+        "operationId": "por_divisao_rh_diagnostico_por_divisao_get",
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ResumoDivisao"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado ou sessão expirada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessao": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/rh/diagnostico/{codigo}": {
+      "get": {
+        "tags": [
+          "rh-diagnostico"
+        ],
+        "summary": "Lista nominal de uma regra (JSON ou CSV)",
+        "description": "**Permissão:** `rh:diagnostico:listar`\n\nLista nominal de uma regra. Com formato=csv, baixa tudo para o Excel.",
+        "operationId": "lista_nominal_rh_diagnostico__codigo__get",
+        "parameters": [
+          {
+            "name": "codigo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Codigo"
+            }
+          },
+          {
+            "name": "formato",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^(json|csv)$",
+              "default": "json",
+              "title": "Formato"
+            }
+          },
+          {
+            "name": "limite",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limite"
+            }
+          },
+          {
+            "name": "pagina",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Pagina"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListaDaRegra"
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "string",
+                  "description": "Com formato=csv: planilha separada por ponto e vírgula"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado ou sessão expirada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessao": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/rh/servidores/{registro}/pendencias": {
+      "get": {
+        "tags": [
+          "rh-diagnostico"
+        ],
+        "summary": "Ficha de pendências de um vínculo",
+        "description": "**Permissão:** `rh:diagnostico:listar`\n\nTudo o que o diagnóstico encontrou para um vínculo ativo.",
+        "operationId": "ficha_de_pendencias_rh_servidores__registro__pendencias_get",
+        "parameters": [
+          {
+            "name": "registro",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Registro"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ficha"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado ou sessão expirada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessao": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/": {
+      "get": {
+        "tags": [
+          "infra"
+        ],
+        "summary": "Verificar se a API está no ar",
+        "operationId": "health__get",
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Status"
+                }
+              }
+            }
+          }
+        },
+        "description": "**Acesso:** pública"
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Body_token_oauth_token_post": {
+        "properties": {
+          "grant_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grant Type"
+          },
+          "client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          },
+          "client_secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Secret"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "redirect_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Redirect Uri"
+          }
+        },
+        "type": "object",
+        "title": "Body_token_oauth_token_post"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "UsuarioAlteracao": {
+        "properties": {
+          "nome": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255,
+                "minLength": 2
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nome"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "admin",
+                  "rh",
+                  "consulta"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "ativo": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ativo"
+          }
+        },
+        "type": "object",
+        "title": "UsuarioAlteracao",
+        "example": {
+          "ativo": true,
+          "role": "rh"
+        }
+      },
+      "UsuarioNovo": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 255,
+            "pattern": "^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$",
+            "title": "Email"
+          },
+          "nome": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 2,
+            "title": "Nome"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "rh",
+              "consulta"
+            ],
+            "title": "Role"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "nome",
+          "role"
+        ],
+        "title": "UsuarioNovo",
+        "example": {
+          "email": "fulano@gmail.com",
+          "nome": "Fulano de Tal",
+          "role": "consulta"
+        }
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "Auditoria": {
+        "properties": {
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "pagina": {
+            "title": "Pagina",
+            "type": "integer"
+          },
+          "limite": {
+            "title": "Limite",
+            "type": "integer"
+          },
+          "itens": {
+            "items": {
+              "$ref": "#/components/schemas/RegistroAuditoria"
+            },
+            "title": "Itens",
+            "type": "array"
+          }
+        },
+        "required": [
+          "total",
+          "pagina",
+          "limite",
+          "itens"
+        ],
+        "title": "Auditoria",
+        "type": "object"
+      },
+      "Dominio": {
+        "properties": {
+          "CODIGO": {
+            "title": "Codigo",
+            "type": "string"
+          },
+          "NOME": {
+            "title": "Nome",
+            "type": "string"
+          }
+        },
+        "required": [
+          "CODIGO",
+          "NOME"
+        ],
+        "title": "Dominio",
+        "type": "object"
+      },
+      "Encerradas": {
+        "properties": {
+          "encerradas": {
+            "title": "Encerradas",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "encerradas"
+        ],
+        "title": "Encerradas",
+        "type": "object"
+      },
+      "Erro": {
+        "properties": {
+          "detail": {
+            "examples": [
+              "Sem permissão"
+            ],
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "Erro",
+        "type": "object"
+      },
+      "Ficha": {
+        "properties": {
+          "registro": {
+            "title": "Registro",
+            "type": "string"
+          },
+          "matricula": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matricula"
+          },
+          "contrato": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contrato"
+          },
+          "servidor": {
+            "title": "Servidor",
+            "type": "string"
+          },
+          "situacao": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Situacao"
+          },
+          "vinculo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vinculo"
+          },
+          "divisao": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Divisao"
+          },
+          "local_trabalho": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Local Trabalho"
+          },
+          "gerado_em": {
+            "format": "date-time",
+            "title": "Gerado Em",
+            "type": "string"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "pendencias": {
+            "items": {
+              "$ref": "#/components/schemas/Pendencia"
+            },
+            "title": "Pendencias",
+            "type": "array"
+          }
+        },
+        "required": [
+          "registro",
+          "matricula",
+          "contrato",
+          "servidor",
+          "situacao",
+          "vinculo",
+          "divisao",
+          "local_trabalho",
+          "gerado_em",
+          "total",
+          "pendencias"
+        ],
+        "title": "Ficha",
+        "type": "object"
+      },
+      "ListaDaRegra": {
+        "properties": {
+          "regra": {
+            "$ref": "#/components/schemas/RegraBase"
+          },
+          "gerado_em": {
+            "format": "date-time",
+            "title": "Gerado Em",
+            "type": "string"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "servidores": {
+            "title": "Servidores",
+            "type": "integer"
+          },
+          "pagina": {
+            "title": "Pagina",
+            "type": "integer"
+          },
+          "limite": {
+            "title": "Limite",
+            "type": "integer"
+          },
+          "itens": {
+            "items": {
+              "$ref": "#/components/schemas/Ocorrencia"
+            },
+            "title": "Itens",
+            "type": "array"
+          }
+        },
+        "required": [
+          "regra",
+          "gerado_em",
+          "total",
+          "servidores",
+          "pagina",
+          "limite",
+          "itens"
+        ],
+        "title": "ListaDaRegra",
+        "type": "object"
+      },
+      "ListaServidores": {
+        "properties": {
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "pagina": {
+            "title": "Pagina",
+            "type": "integer"
+          },
+          "limite": {
+            "title": "Limite",
+            "type": "integer"
+          },
+          "itens": {
+            "description": "Colunas do SIP em maiúsculas (REGISTRO, MATRICULA, CONTRATO, NOME, SITUACAO...) e os nomes traduzidos com o sufixo _NOME. CPF só para quem pode ver a ficha.",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Itens",
+            "type": "array"
+          }
+        },
+        "required": [
+          "total",
+          "pagina",
+          "limite",
+          "itens"
+        ],
+        "title": "ListaServidores",
+        "type": "object"
+      },
+      "Ocorrencia": {
+        "properties": {
+          "REGISTRO": {
+            "title": "Registro",
+            "type": "string"
+          },
+          "MATRICULA": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matricula"
+          },
+          "CONTRATO": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contrato"
+          },
+          "SERVIDOR": {
+            "title": "Servidor",
+            "type": "string"
+          },
+          "CPF_SERVIDOR": {
+            "title": "Cpf Servidor",
+            "type": "string"
+          },
+          "ADMISSAO": {
+            "title": "Admissao",
+            "type": "string"
+          },
+          "SITUACAO": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Situacao"
+          },
+          "VINCULO": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vinculo"
+          },
+          "CARGO": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cargo"
+          },
+          "DIVISAO": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Divisao"
+          },
+          "LOCAL_TRABALHO": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Local Trabalho"
+          },
+          "CELULAR": {
+            "title": "Celular",
+            "type": "string"
+          },
+          "EMAIL": {
+            "title": "Email",
+            "type": "string"
+          },
+          "ITEM": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Daqui até NOME_MAE: só nas regras de dependente",
+            "title": "Item"
+          },
+          "DEPENDENTE": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Dependente"
+          },
+          "PARENTESCO": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Parentesco"
+          },
+          "NASCIMENTO": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Nascimento"
+          },
+          "IDADE": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Idade"
+          },
+          "CPF_DEPENDENTE": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Cpf Dependente"
+          },
+          "DEPENDENTE_IRRF": {
+            "anyOf": [
+              {
+                "enum": [
+                  "Sim",
+                  "Não"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Dependente Irrf"
+          },
+          "SALARIO_FAMILIA": {
+            "anyOf": [
+              {
+                "enum": [
+                  "Sim",
+                  "Não"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Salario Familia"
+          },
+          "FAIXA_IDADE": {
+            "anyOf": [
+              {
+                "enum": [
+                  "Sim",
+                  "Não"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Faixa Idade"
+          },
+          "UNIVERSITARIO": {
+            "anyOf": [
+              {
+                "enum": [
+                  "Sim",
+                  "Não"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Universitario"
+          },
+          "DEFICIENTE": {
+            "anyOf": [
+              {
+                "enum": [
+                  "Sim",
+                  "Não"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Deficiente"
+          },
+          "DOCUMENTOS": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Documentos"
+          },
+          "DATA_ENTREGA": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Data Entrega"
+          },
+          "NOME_MAE": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Nome Mae"
+          },
+          "DETALHE": {
+            "title": "Detalhe",
+            "type": "string"
+          }
+        },
+        "required": [
+          "REGISTRO",
+          "MATRICULA",
+          "CONTRATO",
+          "SERVIDOR",
+          "CPF_SERVIDOR",
+          "ADMISSAO",
+          "SITUACAO",
+          "VINCULO",
+          "CARGO",
+          "DIVISAO",
+          "LOCAL_TRABALHO",
+          "CELULAR",
+          "EMAIL",
+          "DETALHE"
+        ],
+        "title": "Ocorrencia",
+        "type": "object"
+      },
+      "Painel": {
+        "properties": {
+          "gerado_em": {
+            "format": "date-time",
+            "title": "Gerado Em",
+            "type": "string"
+          },
+          "universo": {
+            "$ref": "#/components/schemas/Universo"
+          },
+          "resumo": {
+            "$ref": "#/components/schemas/Resumo"
+          },
+          "regras": {
+            "description": "Já ordenadas por gravidade e quantidade",
+            "items": {
+              "$ref": "#/components/schemas/RegraDoPainel"
+            },
+            "title": "Regras",
+            "type": "array"
+          }
+        },
+        "required": [
+          "gerado_em",
+          "universo",
+          "resumo",
+          "regras"
+        ],
+        "title": "Painel",
+        "type": "object"
+      },
+      "Pendencia": {
+        "properties": {
+          "codigo": {
+            "title": "Codigo",
+            "type": "string"
+          },
+          "titulo": {
+            "title": "Titulo",
+            "type": "string"
+          },
+          "tipo": {
+            "enum": [
+              "erro",
+              "alerta",
+              "recadastro",
+              "conferencia",
+              "indicador"
+            ],
+            "title": "Tipo",
+            "type": "string"
+          },
+          "item": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item"
+          },
+          "dependente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dependente"
+          },
+          "parentesco": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parentesco"
+          },
+          "idade": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idade"
+          },
+          "detalhe": {
+            "title": "Detalhe",
+            "type": "string"
+          },
+          "dados": {
+            "additionalProperties": true,
+            "description": "Demais campos do dependente, quando houver",
+            "title": "Dados",
+            "type": "object"
+          }
+        },
+        "required": [
+          "codigo",
+          "titulo",
+          "tipo",
+          "item",
+          "dependente",
+          "parentesco",
+          "idade",
+          "detalhe",
+          "dados"
+        ],
+        "title": "Pendencia",
+        "type": "object"
+      },
+      "Perfil": {
+        "properties": {
+          "role": {
+            "enum": [
+              "admin",
+              "rh",
+              "consulta"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "nome": {
+            "title": "Nome",
+            "type": "string"
+          },
+          "permissoes": {
+            "items": {
+              "$ref": "#/components/schemas/PermissaoDoPerfil"
+            },
+            "title": "Permissoes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "role",
+          "nome",
+          "permissoes"
+        ],
+        "title": "Perfil",
+        "type": "object"
+      },
+      "PermissaoDoPerfil": {
+        "properties": {
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          },
+          "descricao": {
+            "title": "Descricao",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug",
+          "descricao"
+        ],
+        "title": "PermissaoDoPerfil",
+        "type": "object"
+      },
+      "RegistroAuditoria": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "quando": {
+            "format": "date-time",
+            "title": "Quando",
+            "type": "string"
+          },
+          "usuario_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usuario Id"
+          },
+          "usuario_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usuario Email"
+          },
+          "acao": {
+            "examples": [
+              "servidores.detalhar"
+            ],
+            "title": "Acao",
+            "type": "string"
+          },
+          "alvo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alvo"
+          },
+          "detalhe": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detalhe"
+          },
+          "ip": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ip"
+          }
+        },
+        "required": [
+          "id",
+          "quando",
+          "usuario_id",
+          "usuario_email",
+          "acao",
+          "alvo",
+          "detalhe",
+          "ip"
+        ],
+        "title": "RegistroAuditoria",
+        "type": "object"
+      },
+      "RegraBase": {
+        "properties": {
+          "codigo": {
+            "examples": [
+              "D03"
+            ],
+            "title": "Codigo",
+            "type": "string"
+          },
+          "titulo": {
+            "title": "Titulo",
+            "type": "string"
+          },
+          "tipo": {
+            "enum": [
+              "erro",
+              "alerta",
+              "recadastro",
+              "conferencia",
+              "indicador"
+            ],
+            "title": "Tipo",
+            "type": "string"
+          },
+          "alvo": {
+            "enum": [
+              "dependente",
+              "servidor"
+            ],
+            "title": "Alvo",
+            "type": "string"
+          },
+          "descricao": {
+            "title": "Descricao",
+            "type": "string"
+          },
+          "orientacao": {
+            "title": "Orientacao",
+            "type": "string"
+          }
+        },
+        "required": [
+          "codigo",
+          "titulo",
+          "tipo",
+          "alvo",
+          "descricao",
+          "orientacao"
+        ],
+        "title": "RegraBase",
+        "type": "object"
+      },
+      "RegraDoPainel": {
+        "properties": {
+          "codigo": {
+            "examples": [
+              "D03"
+            ],
+            "title": "Codigo",
+            "type": "string"
+          },
+          "titulo": {
+            "title": "Titulo",
+            "type": "string"
+          },
+          "tipo": {
+            "enum": [
+              "erro",
+              "alerta",
+              "recadastro",
+              "conferencia",
+              "indicador"
+            ],
+            "title": "Tipo",
+            "type": "string"
+          },
+          "alvo": {
+            "enum": [
+              "dependente",
+              "servidor"
+            ],
+            "title": "Alvo",
+            "type": "string"
+          },
+          "descricao": {
+            "title": "Descricao",
+            "type": "string"
+          },
+          "orientacao": {
+            "title": "Orientacao",
+            "type": "string"
+          },
+          "servidores": {
+            "description": "Vínculos com a pendência",
+            "title": "Servidores",
+            "type": "integer"
+          },
+          "ocorrencias": {
+            "description": "Quantas vezes a pendência aparece",
+            "title": "Ocorrencias",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "codigo",
+          "titulo",
+          "tipo",
+          "alvo",
+          "descricao",
+          "orientacao",
+          "servidores",
+          "ocorrencias"
+        ],
+        "title": "RegraDoPainel",
+        "type": "object"
+      },
+      "Resumo": {
+        "properties": {
+          "vinculos": {
+            "title": "Vinculos",
+            "type": "integer"
+          },
+          "com_erro": {
+            "title": "Com Erro",
+            "type": "integer"
+          },
+          "com_alerta": {
+            "title": "Com Alerta",
+            "type": "integer"
+          },
+          "sem_pendencia": {
+            "title": "Sem Pendencia",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "vinculos",
+          "com_erro",
+          "com_alerta",
+          "sem_pendencia"
+        ],
+        "title": "Resumo",
+        "type": "object"
+      },
+      "ResumoDivisao": {
+        "properties": {
+          "vinculos": {
+            "title": "Vinculos",
+            "type": "integer"
+          },
+          "com_erro": {
+            "title": "Com Erro",
+            "type": "integer"
+          },
+          "com_alerta": {
+            "title": "Com Alerta",
+            "type": "integer"
+          },
+          "sem_pendencia": {
+            "title": "Sem Pendencia",
+            "type": "integer"
+          },
+          "divisao": {
+            "title": "Divisao",
+            "type": "string"
+          }
+        },
+        "required": [
+          "vinculos",
+          "com_erro",
+          "com_alerta",
+          "sem_pendencia",
+          "divisao"
+        ],
+        "title": "ResumoDivisao",
+        "type": "object"
+      },
+      "Sessao": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "usuario_id": {
+            "title": "Usuario Id",
+            "type": "integer"
+          },
+          "usuario_email": {
+            "title": "Usuario Email",
+            "type": "string"
+          },
+          "usuario_nome": {
+            "title": "Usuario Nome",
+            "type": "string"
+          },
+          "ativa": {
+            "title": "Ativa",
+            "type": "boolean"
+          },
+          "criada_em": {
+            "format": "date-time",
+            "title": "Criada Em",
+            "type": "string"
+          },
+          "ultimo_uso": {
+            "format": "date-time",
+            "title": "Ultimo Uso",
+            "type": "string"
+          },
+          "expira_em": {
+            "format": "date-time",
+            "title": "Expira Em",
+            "type": "string"
+          },
+          "encerrada_em": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Encerrada Em"
+          },
+          "ip": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ip"
+          },
+          "navegador": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Navegador"
+          }
+        },
+        "required": [
+          "id",
+          "usuario_id",
+          "usuario_email",
+          "usuario_nome",
+          "ativa",
+          "criada_em",
+          "ultimo_uso",
+          "expira_em",
+          "encerrada_em",
+          "ip",
+          "navegador"
+        ],
+        "title": "Sessao",
+        "type": "object"
+      },
+      "Status": {
+        "properties": {
+          "status": {
+            "examples": [
+              "ok"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "Status",
+        "type": "object"
+      },
+      "Token": {
+        "properties": {
+          "access_token": {
+            "title": "Access Token",
+            "type": "string"
+          },
+          "token_type": {
+            "const": "Bearer",
+            "default": "Bearer",
+            "title": "Token Type",
+            "type": "string"
+          },
+          "expires_in": {
+            "examples": [
+              900
+            ],
+            "title": "Expires In",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "access_token",
+          "expires_in"
+        ],
+        "title": "Token",
+        "type": "object"
+      },
+      "Universo": {
+        "properties": {
+          "empresa": {
+            "title": "Empresa",
+            "type": "string"
+          },
+          "situacoes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Situacoes",
+            "type": "array"
+          },
+          "vinculos": {
+            "title": "Vinculos",
+            "type": "integer"
+          },
+          "dependentes": {
+            "title": "Dependentes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "empresa",
+          "situacoes",
+          "vinculos",
+          "dependentes"
+        ],
+        "title": "Universo",
+        "type": "object"
+      },
+      "Usuario": {
+        "properties": {
+          "sub": {
+            "description": "Id do usuário",
+            "examples": [
+              "1"
+            ],
+            "title": "Sub",
+            "type": "string"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "roles": {
+            "examples": [
+              [
+                "rh"
+              ]
+            ],
+            "items": {
+              "type": "string"
+            },
+            "title": "Roles",
+            "type": "array"
+          },
+          "permissions": {
+            "examples": [
+              [
+                "rh:diagnostico:painel",
+                "rh:servidores:listar"
+              ]
+            ],
+            "items": {
+              "type": "string"
+            },
+            "title": "Permissions",
+            "type": "array"
+          },
+          "exp": {
+            "description": "Validade do token atual (epoch, em segundos)",
+            "title": "Exp",
+            "type": "integer"
+          },
+          "sessao_expira_em": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Fim da sessão; nulo quando o acesso é só por token",
+            "title": "Sessao Expira Em"
+          }
+        },
+        "required": [
+          "sub",
+          "email",
+          "name",
+          "roles",
+          "permissions",
+          "exp",
+          "sessao_expira_em"
+        ],
+        "title": "Usuario",
+        "type": "object"
+      },
+      "UsuarioAdmin": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "nome": {
+            "title": "Nome",
+            "type": "string"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "ativo": {
+            "title": "Ativo",
+            "type": "boolean"
+          },
+          "ja_entrou": {
+            "title": "Ja Entrou",
+            "type": "boolean"
+          },
+          "ultimo_login": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ultimo Login"
+          },
+          "criado_em": {
+            "format": "date-time",
+            "title": "Criado Em",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "nome",
+          "role",
+          "ativo",
+          "ja_entrou",
+          "ultimo_login",
+          "criado_em"
+        ],
+        "title": "UsuarioAdmin",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "sessao": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "rh_session",
+        "description": "Cookie criado por /rh/login. O navegador envia sozinho."
+      },
+      "bearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Token de GET /rh/token (15 minutos)."
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "rh",
+      "description": "Login do RH, usuário atual, servidores, dependentes e domínios."
+    },
+    {
+      "name": "rh-diagnostico",
+      "description": "Painel, listas nominais por regra, planilhas e ficha de pendências."
+    },
+    {
+      "name": "rh-admin",
+      "description": "Usuários, sessões e auditoria. Só para o perfil `admin`."
+    },
+    {
+      "name": "auth",
+      "description": "Serviço de autenticação: Google, código de autorização, token e JWKS."
+    },
+    {
+      "name": "infra",
+      "description": "Verificação de funcionamento."
+    }
+  ]
+}

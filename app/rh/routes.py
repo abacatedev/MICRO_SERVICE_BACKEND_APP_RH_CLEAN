@@ -1,6 +1,6 @@
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -16,7 +16,7 @@ from app.rh.deps import (
     COOKIE_NAME, SESSION_COOKIE, current_user, require_permission,
     set_session_cookie, set_token_cookie,
 )
-from app.security import decode_access_token, new_secret, safe_equal
+from app.security import create_access_token, decode_access_token, new_secret, safe_equal
 
 router = APIRouter(prefix="/rh", tags=["rh"])
 STATE_COOKIE = "rh_state"
@@ -50,22 +50,51 @@ def _registro(valor: str) -> str:
     return valor.zfill(6) if valor.isdigit() else valor
 
 
-def _negado():
+RETORNO_COOKIE = "rh_retorno"
+
+
+def _retorno_permitido(url: str | None) -> str | None:
+    """Só aceita voltar para um frontend da lista CORS_ORIGINS (evita redirecionamento aberto)."""
+    if not url:
+        return None
+    partes = urlsplit(url)
+    origem = f"{partes.scheme}://{partes.netloc}"
+    return url if origem in settings.origens else None
+
+
+def _destino(request: Request) -> str:
+    return _retorno_permitido(request.cookies.get(RETORNO_COOKIE)) or settings.frontend_url
+
+
+def _negado(request: Request):
     """Com frontend configurado, volta para ele com o aviso; sem ele, responde 403."""
-    if settings.frontend_url.startswith("http"):
-        sep = "&" if "?" in settings.frontend_url else "?"
-        return RedirectResponse(f"{settings.frontend_url}{sep}acesso=negado", status_code=302)
+    destino = _destino(request)
+    if destino.startswith("http"):
+        sep = "&" if "?" in destino else "?"
+        resp = RedirectResponse(f"{destino}{sep}acesso=negado", status_code=302)
+        resp.delete_cookie(RETORNO_COOKIE)
+        return resp
     raise HTTPException(403, "Acesso negado")
 
 
 # ---------- login do RH (a aplicação como cliente do Auth) ----------
 
 @router.get("/login")
-def login():
+def login(
+    retorno: str | None = Query(
+        None, description="Para onde voltar depois do login. Precisa ser um frontend de CORS_ORIGINS."
+    ),
+):
+    if retorno and _retorno_permitido(retorno) is None:
+        raise HTTPException(400, "Endereço de retorno não autorizado")
     state = new_secret()
     params = {"client_id": settings.rh_client_id, "redirect_uri": _callback_url(), "state": state}
     resp = RedirectResponse(f"/auth/google?{urlencode(params)}", status_code=302)
     resp.set_cookie(STATE_COOKIE, state, max_age=600, httponly=True, samesite="lax")
+    if retorno:
+        resp.set_cookie(RETORNO_COOKIE, retorno, max_age=600, httponly=True, samesite="lax")
+    else:
+        resp.delete_cookie(RETORNO_COOKIE)
     return resp
 
 
@@ -81,7 +110,7 @@ def callback(
     if not saved or not state or not safe_equal(state, saved):
         raise HTTPException(400, "state inválido")
     if error or not code:
-        return _negado()
+        return _negado(request)
     try:
         # mesmo processo: chama o serviço direto, sem HTTP para si mesmo
         tokens = exchange_code(
@@ -92,22 +121,27 @@ def callback(
             redirect_uri=_callback_url(),
         )
     except OAuthError:
-        return _negado()
+        return _negado(request)
 
     # Sessão longa: é ela que renova o token de 15 min sem novo login no Google
     claims = decode_access_token(tokens["access_token"], audience=settings.rh_client_id)
     rh_app = db.scalar(select(Application).where(Application.client_id == settings.rh_client_id))
     raw = sessions.criar(db, int(claims["sub"]), rh_app.id, request)
 
-    resp = RedirectResponse(settings.frontend_url, status_code=302)
+    resp = RedirectResponse(_destino(request), status_code=302)
     resp.delete_cookie(STATE_COOKIE)
+    resp.delete_cookie(RETORNO_COOKIE)
     set_token_cookie(resp, tokens["access_token"])
     set_session_cookie(resp, raw)
     return resp
 
 
 @router.get("/logout")
-def logout(request: Request, db: Session = Depends(get_db)):
+def logout(
+    request: Request,
+    retorno: str | None = Query(None, description="Para onde voltar depois de sair."),
+    db: Session = Depends(get_db),
+):
     sess = sessions.validar(db, request.cookies.get(SESSION_COOKIE))
     if sess is not None:
         sessions.encerrar(db, sess)
@@ -115,7 +149,9 @@ def logout(request: Request, db: Session = Depends(get_db)):
         audit.registrar(
             db, request, "logout", user_id=sess.user_id, email=user.email if user else None
         )
-    destino = settings.frontend_url if settings.frontend_url.startswith("http") else "/"
+    destino = _retorno_permitido(retorno) or (
+        settings.frontend_url if settings.frontend_url.startswith("http") else "/"
+    )
     resp = RedirectResponse(destino, status_code=302)
     resp.delete_cookie(COOKIE_NAME)
     resp.delete_cookie(SESSION_COOKIE)
@@ -126,6 +162,21 @@ def logout(request: Request, db: Session = Depends(get_db)):
 def me(user: dict = Depends(current_user)):
     campos = ("sub", "email", "name", "roles", "permissions", "exp", "sessao_expira_em")
     return {k: user[k] for k in campos}
+
+
+@router.get("/token")
+def token(response: Response, user: dict = Depends(current_user)):
+    """Token de acesso (JWT RS256, 15 min) para quem está com a sessão aberta.
+
+    Para frontends que preferem enviar `Authorization: Bearer` em vez de depender do cookie.
+    Quando vencer, basta chamar esta rota de novo: a sessão emite outro.
+    """
+    access = create_access_token(
+        user_id=user["id"], email=user["email"], name=user["name"], roles=user["roles"],
+        client_id=settings.rh_client_id,
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return {"access_token": access, "token_type": "Bearer", "expires_in": settings.access_token_seconds}
 
 
 # ---------- dados do SIP (empresa fixa, somente leitura) ----------

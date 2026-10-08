@@ -8,7 +8,13 @@ class Settings(BaseSettings):
     base_url: str = "http://localhost:8000"
     jwt_issuer: str = "http://localhost:8000"
     session_secret: str
-    frontend_url: str = "/rh/me"  # para onde o login volta; em dev: http://localhost:5173/
+    frontend_url: str = "/rh/me"  # para onde o login volta por padrão; ex.: http://localhost:3000/
+    # Frontends autorizados a chamar a API pelo navegador (CORS) e a receber o retorno do login
+    cors_origins: str = "http://localhost:3000,http://localhost:5173"
+
+    @property
+    def origens(self) -> list[str]:
+        return [o.strip().rstrip("/") for o in self.cors_origins.split(",") if o.strip()]
 
     google_client_id: str = ""
     google_client_secret: str = ""

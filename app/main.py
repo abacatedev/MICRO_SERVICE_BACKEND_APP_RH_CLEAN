@@ -1,10 +1,12 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from starlette.middleware.sessions import SessionMiddleware
 
+from app import docs
 from app.auth.errors import OAuthError
 from app.auth.rbac import sync_rbac
 from app.auth.routes import router as auth_router
@@ -26,7 +28,23 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="RH Backend + Auth Service", lifespan=lifespan)
+app = FastAPI(
+    title="Pré-Censo dos Servidores: API do RH",
+    version="1.0.0",
+    lifespan=lifespan,
+    swagger_ui_parameters={"persistAuthorization": True, "docExpansion": "list", "withCredentials": True},
+)
+# Frontends em outra porta (ex.: localhost:3000) chamam a API com o cookie de sessão.
+# Com credenciais, o CORS exige a lista exata de origens; "*" não funciona.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.origens,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept"],
+    expose_headers=["Content-Disposition"],
+    max_age=600,
+)
 app.add_middleware(
     SessionMiddleware,
     secret_key=settings.session_secret,
@@ -53,3 +71,6 @@ app.include_router(rh_diagnostico_router)
 @app.get("/", tags=["infra"])
 def health():
     return {"status": "ok"}
+
+
+docs.configurar(app)
