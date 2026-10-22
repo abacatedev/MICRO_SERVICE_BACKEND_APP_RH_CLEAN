@@ -284,6 +284,8 @@ ROTAS: dict[tuple[str, str], tuple[str, str, Any]] = {
     ("get", "/rh/servidores/{registro}/dependentes"): ("Dependentes de um registro", "rh:dependentes:ler", None),
     ("get", "/rh/diagnostico"): ("Painel do diagnóstico", "rh:diagnostico:painel", Painel),
     ("get", "/rh/diagnostico/por-divisao"): ("Situação dos vínculos por secretaria", "rh:diagnostico:painel", Lista(ResumoDivisao)),
+    ("get", "/rh/diagnostico/por-divisao/perfil"): ("Perfil dos vínculos por secretaria (Raio-X)", "rh:diagnostico:painel", None),
+    ("get", "/rh/diagnostico/por-divisao/regras"): ("Regras do diagnóstico por secretaria (Raio-X)", "rh:diagnostico:painel", None),
     ("get", "/rh/diagnostico/{codigo}"): ("Lista nominal de uma regra (JSON ou CSV)", "rh:diagnostico:listar", ListaDaRegra),
     ("get", "/rh/servidores/{registro}/pendencias"): ("Ficha de pendências de um vínculo", "rh:diagnostico:listar", Ficha),
     ("get", "/rh/admin/roles"): ("Perfis e o que cada um pode", "rh:usuarios:gerenciar", Lista(Perfil)),
@@ -294,6 +296,7 @@ ROTAS: dict[tuple[str, str], tuple[str, str, Any]] = {
     ("delete", "/rh/admin/sessoes/{sessao_id}"): ("Encerrar uma sessão", "rh:usuarios:gerenciar", Encerradas),
     ("delete", "/rh/admin/usuarios/{user_id}/sessoes"): ("Encerrar todas as sessões de um usuário", "rh:usuarios:gerenciar", Encerradas),
     ("get", "/rh/admin/auditoria"): ("Consultar a auditoria", "rh:auditoria:ler", Auditoria),
+    ("get", "/rh/indicadores/faixa-dependentes"): ("Dependentes por faixa etária", "rh:diagnostico:painel", None),
 }
 REDIRECIONA = {
     ("get", "/auth/google"), ("get", "/auth/google/callback"),

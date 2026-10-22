@@ -16,6 +16,7 @@ from app.models import Application
 from app.rh.admin import router as rh_admin_router
 from app.rh.diagnostico import router as rh_diagnostico_router
 from app.rh.routes import router as rh_router
+from app.rh.faixas import router as rh_faixas_router
 
 
 @asynccontextmanager
@@ -66,6 +67,7 @@ app.include_router(auth_router)
 app.include_router(rh_router)
 app.include_router(rh_admin_router)
 app.include_router(rh_diagnostico_router)
+app.include_router(rh_faixas_router)
 
 
 @app.get("/", tags=["infra"])

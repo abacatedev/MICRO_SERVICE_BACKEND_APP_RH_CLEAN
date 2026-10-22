@@ -36,6 +36,10 @@ REGRAS = [
     Regra("D01", "Dependente sem CPF", "erro", "dependente",
           "O dependente está cadastrado sem CPF, ou com o campo vazio. O eSocial exige o CPF do dependente.",
           f"Pedir o CPF ao servidor. {ONDE_DEP}, aba Outros Documentos."),
+    Regra("D16", "Dependente sem data de nascimento válida", "erro", "dependente",
+          "A data de nascimento do dependente está vazia, é falsa (01/01/1900 ou anterior) ou está no futuro. "
+          "O eSocial exige a data, e sem ela o sistema não controla os limites de idade do IRRF e do salário-família.",
+          f"Pedir ao servidor a certidão ou um documento com a data. {ONDE_DEP}, aba Informações Gerais."),
     Regra("D11", "Dependente sem nenhum documento", "erro", "dependente",
           "O dependente só tem nome e nascimento: sem CPF, sem RG, sem outro documento e sem dados de certidão.",
           f"Pedir os documentos ao servidor. {ONDE_DEP}, abas Informações Gerais e Outros Documentos."),
@@ -43,14 +47,16 @@ REGRAS = [
           "O CPF do dependente não passa na conferência dos dígitos, repete o de outro dependente ou é o do próprio servidor.",
           f"Conferir o documento e corrigir o número. {ONDE_DEP}, aba Outros Documentos."),
     Regra("D03", "IRRF marcado acima da idade, sem controle de faixa de idade", "erro", "dependente",
-          "Dependente IRRF = Sim, acima da idade limite do vínculo, e 'Considerar para Faixa de Idade' = Não. "
+          "Dependente IRRF = Sim, já no ano seguinte ao que completou a idade limite do vínculo (21, ou 24 se "
+          "universitário), e 'Considerar para Faixa de Idade' = Não. "
           "Sem esse controle, o sistema pode continuar deduzindo o imposto (a confirmar com a Fiorilli ou em um holerite).",
           f"Confirmar se o dependente ainda se enquadra; se não, desmarcar. {ONDE_DEP}, aba Dados para Cálculo."),
     Regra("D04", "Salário-família marcado acima da idade, sem controle de faixa de idade", "erro", "dependente",
           "Salário Família = Sim, com a idade limite do vínculo já completada, e 'Considerar para Faixa de Idade' = Não.",
           f"Desmarcar o salário-família. {ONDE_DEP}, aba Dados para Cálculo."),
     Regra("D13", "IRRF marcado acima da idade, com controle de faixa de idade", "alerta", "dependente",
-          "Dependente IRRF = Sim e acima da idade limite, mas 'Considerar para Faixa de Idade' = Sim. "
+          "Dependente IRRF = Sim, já no ano seguinte ao que completou a idade limite, mas "
+          "'Considerar para Faixa de Idade' = Sim. "
           "O sistema deve estar aplicando o limite sozinho; o cadastro é que ficou desatualizado.",
           f"Atualizar o cadastro quando o servidor for chamado no Censo. {ONDE_DEP}, aba Dados para Cálculo."),
     Regra("D14", "Salário-família marcado acima da idade, com controle de faixa de idade", "alerta", "dependente",
@@ -169,6 +175,17 @@ def _data(valor) -> date | None:
     if isinstance(valor, datetime):
         return valor.date()
     return valor if isinstance(valor, date) else None
+
+
+DATA_MINIMA_NASCIMENTO = date(1900, 1, 2)  # 01/01/1900 e anteriores são preenchimento falso
+
+
+def nascimento_valido(valor, hoje: date) -> date | None:
+    """Data de nascimento utilizável: None se vazia, falsa (até 01/01/1900) ou no futuro."""
+    d = _data(valor)
+    if d is None or d < DATA_MINIMA_NASCIMENTO or d > hoje:
+        return None
+    return d
 
 
 def data_br(valor) -> str:
@@ -296,7 +313,8 @@ def avaliar(servidores: list[dict], dependentes: list[dict], cpfs_com_dep_fora: 
 
         for d in deps:
             parentesco = str(d.get("PARENTESCO") or "").strip()
-            idade = anos_entre(d.get("DTNASC"), hoje)
+            nascimento = nascimento_valido(d.get("DTNASC"), hoje)  # data falsa não gera idade
+            idade = anos_entre(nascimento, hoje)
             documentos = documentos_do_dependente(d)
             linha = {
                 **base,
@@ -330,6 +348,9 @@ def avaliar(servidores: list[dict], dependentes: list[dict], cpfs_com_dep_fora: 
                 do_dependente("D02", "CPF repetido no mesmo servidor")
             if not documentos:
                 do_dependente("D11", "Só nome e nascimento cadastrados")
+            if nascimento is None:
+                bruta = _data(d.get("DTNASC"))
+                do_dependente("D16", "Data vazia" if bruta is None else f"Data inválida: {data_br(bruta)}")
 
             feminino = str(d.get("SEXO") or "").strip().upper() == "F"
             controla_faixa = _sim(d.get("FAIXA_IDADE"))
@@ -339,10 +360,14 @@ def avaliar(servidores: list[dict], dependentes: list[dict], cpfs_com_dep_fora: 
                     lim_irrf, rotulo = s["IDADE_IRRF_UNIVERSITARIO"], "universitário"
                 else:
                     rotulo = "IRRF"
-                if _sim(d.get("IRRF")) and lim_irrf is not None and idade > lim_irrf:
+                # Regra da Receita: o dependente perde a condição no ano SEGUINTE ao que completa
+                # o limite (21, ou 24 se universitário/técnico). Então conta o ano, não a idade de hoje.
+                idade_no_ano = hoje.year - nascimento.year  # idade que completa no ano corrente
+                if _sim(d.get("IRRF")) and lim_irrf is not None and idade_no_ano > lim_irrf:
                     do_dependente(
                         "D13" if controla_faixa else "D03",
-                        f"{idade} anos; limite de {rotulo} do vínculo: {lim_irrf}",
+                        f"{idade} anos; completou {lim_irrf} em {nascimento.year + lim_irrf} "
+                        f"(limite de {rotulo} do vínculo: {lim_irrf})",
                     )
                 lim_sf = s.get("IDADESALFAMFEM") if feminino else s.get("IDADESALFAMMASC")
                 if _sim(d.get("SALFAMILIA")) and lim_sf is not None and idade >= lim_sf:
@@ -357,11 +382,11 @@ def avaliar(servidores: list[dict], dependentes: list[dict], cpfs_com_dep_fora: 
                 do_dependente("D06", f"{len(conjuges)} cônjuges ou companheiros")
 
             if parentesco in DESCENDENTE:
-                diferenca = anos_entre(s.get("DTNASCIMENTO"), d.get("DTNASC"))
+                diferenca = anos_entre(s.get("DTNASCIMENTO"), nascimento)
                 if diferenca is not None and diferenca < DIFERENCA_MINIMA_ANOS:
                     do_dependente("D07", f"Servidor apenas {diferenca} anos mais velho")
             elif parentesco in ASCENDENTE:
-                diferenca = anos_entre(d.get("DTNASC"), s.get("DTNASCIMENTO"))
+                diferenca = anos_entre(nascimento, s.get("DTNASCIMENTO"))
                 if diferenca is not None and diferenca < DIFERENCA_MINIMA_ANOS:
                     do_dependente("D07", f"Apenas {diferenca} anos mais velho que o servidor")
 

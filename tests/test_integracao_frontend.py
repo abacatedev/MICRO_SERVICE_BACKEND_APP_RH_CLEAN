@@ -73,7 +73,7 @@ def test_swagger_documenta_todas_as_rotas(ctx):  # noqa: F811
     spec = ctx["http"].get("/openapi.json").json()
     publicadas = {(m, c) for c, ops in spec["paths"].items() for m in ops}
     assert publicadas == set(docs.ROTAS), publicadas ^ set(docs.ROTAS)  # nenhuma rota sem documentação
-    assert len(publicadas) == 26
+    assert len(publicadas) == len(docs.ROTAS)
 
     for (metodo, caminho), (resumo, permissao, _) in docs.ROTAS.items():
         op = spec["paths"][caminho][metodo]

@@ -320,7 +320,9 @@ def test_logout_e_encerramento_pelo_admin(ctx):
 def test_callback_do_login_cria_sessao_e_cookies(ctx, monkeypatch):
     from app.config import settings
 
+    
     monkeypatch.setattr(settings, "rh_client_secret", SECRET)
+    monkeypatch.setattr(settings, "frontend_url", "/rh/me")  # independe do .env da máquina
     http = ctx["http"]
     http.cookies.set("rh_state", "abc")
     r = http.get("/rh/callback", params={"code": novo_codigo(ctx), "state": "abc"}, follow_redirects=False)

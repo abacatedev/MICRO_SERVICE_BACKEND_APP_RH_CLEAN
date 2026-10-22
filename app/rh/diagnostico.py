@@ -3,6 +3,7 @@ painel, lista nominal (JSON ou CSV) e ficha de pendências por servidor."""
 import csv
 import io
 import time
+from collections import Counter, defaultdict
 from datetime import date, datetime, timezone
 from threading import Lock
 
@@ -32,6 +33,7 @@ def carregar() -> tuple[list[dict], list[dict], set[str]]:
     servidores = firebird.query(
         "SELECT T.REGISTRO, T.MATRICULA, T.CONTRATO, T.NOME, T.CPF, T.PIS, T.ELEITOR, "
         "T.DTNASCIMENTO, T.NOMEMAE, T.CELULAR, T.EMAIL, T.DTTERMINO, T.DTADMISSAO, T.ESTADOCIVIL, "
+        "T.DIVISAO, "
         "S.NOME AS SITUACAO_NOME, V.NOME AS VINCULO_NOME, C.NOME AS CARGOATUAL_NOME, "
         "DV.NOME AS DIVISAO_NOME, LT.NOME AS LOCAL_TRABALHO_NOME, "
         "V.IDADE_IRRF_MASC, V.IDADE_IRRF_FEMI, V.IDADE_IRRF_UNIVERSITARIO, "
@@ -120,6 +122,8 @@ def resultado(atualizar: bool = False) -> dict:
             },
             "servidores": {s["REGISTRO"]: s for s in servidores},
             "por_regra": por_regra,
+            # quantos dependentes cada vínculo tem (para os totais por secretaria)
+            "deps_por_registro": Counter(d["REGISTRO"] for d in dependentes),
         }
         _cache.update(t=time.monotonic(), dados=dados)
         return dados
@@ -169,6 +173,121 @@ def por_divisao(
         grupos.setdefault(s.get("DIVISAO_NOME") or "Sem divisão", []).append(registro)
     linhas = [{"divisao": nome, **_resumo(regs, dados["classe"])} for nome, regs in grupos.items()]
     return sorted(linhas, key=lambda x: (-x["com_erro"], -x["vinculos"], x["divisao"]))
+
+
+# ---------- Raio-X das Secretarias (frontend) ----------
+
+# Cartões da tela: cada um soma uma ou mais regras e conta o vínculo uma vez só.
+# Para mudar o que um cartão mostra, altere só esta lista.
+CARTOES = [
+    {"id": "irrf", "titulo": "IRRF acima da idade", "regras": ["D03", "D13"]},
+    {"id": "salfam", "titulo": "Salário-família acima da idade", "regras": ["D04", "D14"]},
+    {"id": "depCpf", "titulo": "Dependente sem CPF", "regras": ["D01"]},
+    {"id": "depNasc", "titulo": "Dependente sem nascimento", "regras": ["D16"]},
+    {"id": "cert", "titulo": "Certidão ausente", "regras": ["D12"], "critica": True},
+    {"id": "semEmail", "titulo": "Servidor sem e-mail", "regras": ["S02"]},
+    {"id": "semFone", "titulo": "Servidor sem celular", "regras": ["S01"]},
+]
+MINIMO_LOCAL = 3   # locais de trabalho com pelo menos 3 vínculos
+MINIMO_CARGO = 5   # cargos com pelo menos 5 vínculos
+
+
+def _divisao_de(servidor: dict) -> tuple[str, str]:
+    codigo = str(servidor.get("DIVISAO") or "").strip()
+    return (codigo or "SEM", servidor.get("DIVISAO_NOME") or "Sem divisão")
+
+
+def agregar_por_divisao(dados: dict) -> dict:
+    """Vínculos, dependentes, situação e contagem de cada regra e cartão, por secretaria.
+    Função pura sobre o resultado do diagnóstico: só números, nenhum dado pessoal."""
+    servidores = dados["servidores"]
+    deps = dados.get("deps_por_registro", {})
+    classe = dados["classe"]
+
+    grupos: dict[str, dict] = {}
+    for registro, s in servidores.items():
+        codigo, nome = _divisao_de(s)
+        grupos.setdefault(codigo, {"nome": nome, "registros": []})["registros"].append(registro)
+
+    regs_regra = {c: {o["REGISTRO"] for o in oc} for c, oc in dados["por_regra"].items()}
+    regs_cartao = {
+        k["id"]: set().union(*(regs_regra.get(c, set()) for c in k["regras"])) for k in CARTOES
+    }
+
+    def linha(codigo: str, nome: str, registros: list[str]) -> dict:
+        conjunto = set(registros)
+        resumo = _resumo(registros, classe)
+        return {
+            "codigo": codigo,
+            "nome": nome,
+            **resumo,
+            "dependentes": sum(deps.get(r, 0) for r in registros),
+            "conformidade": (
+                round(resumo["sem_pendencia"] / resumo["vinculos"] * 100, 1) if resumo["vinculos"] else 0.0
+            ),
+            "cartoes": {k: len(v & conjunto) for k, v in regs_cartao.items()},
+            "regras": {c: len(v & conjunto) for c, v in regs_regra.items()},
+        }
+
+    divisoes = sorted(
+        (linha(cod, g["nome"], g["registros"]) for cod, g in grupos.items()),
+        key=lambda x: (-x["vinculos"], x["nome"]),
+    )
+    return {
+        "gerado_em": dados["gerado_em"],
+        "cartoes": [
+            {"id": k["id"], "titulo": k["titulo"], "regras": k["regras"], "critica": k.get("critica", False)}
+            for k in CARTOES
+        ],
+        "total": linha("ALL", "Toda a Prefeitura", list(servidores)),
+        "divisoes": divisoes,
+    }
+
+
+def perfil_por_divisao(dados: dict) -> dict:
+    """Locais de trabalho, cargos e tipos de vínculo de cada secretaria (contagens)."""
+    por_div: dict[str, dict[str, Counter]] = defaultdict(
+        lambda: {"locais": Counter(), "cargos": Counter(), "vinculos": Counter()}
+    )
+    for s in dados["servidores"].values():
+        p = por_div[_divisao_de(s)[0]]
+        p["locais"][s.get("LOCAL_TRABALHO_NOME") or "Local não identificado"] += 1
+        p["cargos"][s.get("CARGOATUAL_NOME") or "Sem cargo"] += 1
+        p["vinculos"][s.get("VINCULO_NOME") or "Sem vínculo"] += 1
+
+    def lista(contagem: Counter, minimo: int = 1) -> list[dict]:
+        return [{"nome": n, "vinculos": q} for n, q in contagem.most_common() if q >= minimo]
+
+    return {
+        "gerado_em": dados["gerado_em"],
+        "minimos": {"local": MINIMO_LOCAL, "cargo": MINIMO_CARGO},
+        "divisoes": {
+            cod: {
+                "locais": lista(p["locais"], MINIMO_LOCAL),
+                "cargos": lista(p["cargos"], MINIMO_CARGO),
+                "tipos_vinculo": lista(p["vinculos"]),
+            }
+            for cod, p in por_div.items()
+        },
+    }
+
+
+@router.get("/diagnostico/por-divisao/regras")
+def por_divisao_regras(
+    atualizar: bool = False,
+    _: dict = Depends(require_permission("rh:diagnostico:painel")),
+):
+    """Raio-X: contagem de cada regra e de cada cartão por secretaria, mais o total da Prefeitura.
+    Cada regra conta o vínculo uma vez, mesmo com vários dependentes no mesmo problema."""
+    return agregar_por_divisao(resultado(atualizar))
+
+
+@router.get("/diagnostico/por-divisao/perfil")
+def por_divisao_perfil(
+    _: dict = Depends(require_permission("rh:diagnostico:painel")),
+):
+    """Raio-X, aba Quadro: locais (3+), cargos (5+) e tipos de vínculo de cada secretaria."""
+    return perfil_por_divisao(resultado())
 
 
 @router.get("/diagnostico/{codigo}")
