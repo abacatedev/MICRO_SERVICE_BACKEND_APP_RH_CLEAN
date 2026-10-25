@@ -88,6 +88,38 @@ def inicio_bloco_continuo(lancamentos, ref: date, tolerancia_dias: int | None = 
     return None
 
 
+def meses_ate(ref: date, quantidade: int) -> list[tuple[date, date]]:
+    """Os `quantidade` meses que terminam no mês de `ref`, como [inicio, fim_exclusivo).
+
+    O último mês é cortado no dia seguinte a `ref` (a cópia não tem dados depois dela).
+    """
+    resultado = []
+    ano, mes = ref.year, ref.month
+    for _ in range(quantidade):
+        inicio = date(ano, mes, 1)
+        fim = date(ano + (mes == 12), mes % 12 + 1, 1)
+        resultado.append((inicio, min(fim, ref + timedelta(days=1))))
+        ano, mes = (ano - 1, 12) if mes == 1 else (ano, mes - 1)
+    return list(reversed(resultado))
+
+
+def afastado_no_dia(dtini: date, dtfim: date | None, dia: date) -> bool:
+    fe = fim_exclusivo(dtfim)
+    return dtini <= dia and (fe is None or fe > dia)
+
+
+def episodios(lancamentos, tolerancia_dias: int | None = None) -> list[tuple[date, date]]:
+    """Agrupa lançamentos emendados num mesmo episódio (licença renovada conta uma vez)."""
+    tol = C.TOLERANCIA_EMENDA_DIAS if tolerancia_dias is None else tolerancia_dias
+    pedacos = [(i, fim_exclusivo(f) or i + timedelta(days=1)) for i, f in lancamentos if i is not None]
+    return unir_intervalos(pedacos, tol)
+
+
+def fator_bradford(episodios: int, dias: int) -> int:
+    """Fator de Bradford: S² × D (S = episódios, D = dias afastados)."""
+    return episodios * episodios * dias
+
+
 def dias_sobrepostos(a_ini, a_fim, b_ini, b_fim, ref: date) -> int:
     limite = ref + timedelta(days=1)
     fa = fim_exclusivo(a_fim) or limite

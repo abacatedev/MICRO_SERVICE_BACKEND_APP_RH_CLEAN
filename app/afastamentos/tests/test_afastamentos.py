@@ -192,3 +192,131 @@ def test_sem_autenticacao_configurada_fica_fechado():
     app.dependency_overrides[R.conexao] = lambda: _ConexaoFalsa()
     assert TestClient(app).get("/rh/afastamentos/resumo").status_code in (404, 503)
     assert TestClient(app).get("/rh/afastamentos/vigentes/resumo").status_code == 503
+
+
+# ------------------------------------------------------------------ fase 2
+def test_meses_ate_corta_no_dia_da_copia():
+    meses = K.meses_ate(D(2026, 9, 29), 3)
+    assert meses == [(D(2026, 7, 1), D(2026, 8, 1)), (D(2026, 8, 1), D(2026, 9, 1)), (D(2026, 9, 1), D(2026, 9, 30))]
+    assert K.meses_ate(D(2026, 1, 15), 2)[0] == (D(2025, 12, 1), D(2026, 1, 1))
+
+
+def test_episodios_licenca_renovada_conta_uma_vez():
+    lanc = [(D(2026, 2, 1), D(2026, 2, 16)), (D(2026, 2, 16), D(2026, 3, 1)),   # renovação emendada
+            (D(2026, 5, 1), D(2026, 5, 4)), (D(2026, 8, 10), D(2026, 8, 12))]
+    assert len(K.episodios(lanc)) == 3
+
+
+def test_csv_para_excel_brasileiro():
+    from afastamentos import exportar as EX
+    dados = EX.para_csv("retornos", [{"registro": "000123", "nome": "Fulana", "dtini": D(2026, 9, 1),
+                                      "retorno_previsto": D(2026, 10, 2), "emenda_outro_afastamento": True}])
+    texto = dados.decode("utf-8")
+    assert texto.startswith("﻿REGISTRO;Matrícula;Nome")
+    assert "000123;;Fulana;;;;;;01/09/2026;02/10/2026;;Sim" in texto
+
+
+ROTAS_FASE2 = [
+    "/rh/afastamentos/serie-mensal?meses=6",
+    "/rh/afastamentos/absenteismo",
+    "/rh/afastamentos/recorrentes",
+    "/rh/afastamentos/gerencial",
+]
+
+
+@pytest.mark.parametrize("rota", ROTAS_FASE2)
+def test_rotas_fase2_respondem(cliente, rota):
+    r = cliente.get(rota)
+    assert r.status_code == 200, r.text
+
+
+@pytest.mark.parametrize("rel", ["vigentes", "retornos", "longos", "acumulado", "recorrentes", "esocial-pendencias"])
+def test_exportar_csv(cliente, rel):
+    r = cliente.get(f"/rh/afastamentos/exportar/{rel}")
+    assert r.status_code == 200, r.text
+    assert r.headers["content-type"].startswith("text/csv")
+    assert "attachment" in r.headers["content-disposition"]
+
+
+def test_gerencial_sem_dados_pessoais(cliente):
+    texto = cliente.get("/rh/afastamentos/gerencial").text.lower()
+    assert '"cpf"' not in texto and '"registro"' not in texto and '"matricula"' not in texto
+
+
+# ------------------------------------------------------------------ fase 2 com dados
+class _ConexaoComDados:
+    """Responde cada SQL pelo trecho que o identifica."""
+
+    def __init__(self, respostas):
+        self.respostas = respostas
+
+    def cursor(self):
+        conexao = self
+
+        class _Cur:
+            description, _l = [], []
+
+            def execute(self, sql, params):
+                for trecho, linhas in conexao.respostas:
+                    if trecho in sql:
+                        self.description = [(k.upper(),) for k in (linhas[0] if linhas else {"x": 0})]
+                        self._l = [tuple(l.values()) for l in linhas]
+                        return
+                self.description, self._l = [("X",)], []
+
+            def fetchall(self):
+                return self._l
+
+            def close(self):
+                pass
+
+        return _Cur()
+
+
+def _af(reg, div, ini, fim, reduzido=12, causa="94"):
+    return {"registro": reg, "matricula": reg, "nome": f"S{reg}", "cpf": "", "situacao_vinculo": 1,
+            "divisao_codigo": div, "divisao": f"D{div}", "cargo_codigo": "1", "cargo": "C", "item": hash((reg, ini)) % 10**6,
+            "reduzido": reduzido, "tipo": f"T{reduzido}", "causa": causa, "dtini": ini, "dtfim": fim}
+
+
+def test_absenteismo_percentual_por_secretaria(monkeypatch):
+    from afastamentos import servico as SV
+    monkeypatch.setenv("SIP_DATA_COPIA", "2026-09-29")
+    con = _ConexaoComDados([
+        ("GROUP BY d.CODIGO", [{"divisao_codigo": "1", "divisao": "D1", "vinculos": 10},
+                               {"divisao_codigo": "2", "divisao": "D2", "vinculos": 5}]),
+        ("m.DTINI < ?", [_af("A", "1", D(2026, 9, 1), D(2026, 9, 11)),      # 10 dias
+                         _af("A", "1", D(2026, 9, 5), D(2026, 9, 15)),      # sobrepõe: +4
+                         _af("B", "2", D(2026, 8, 20), D(2026, 9, 3))]),    # 2 dias em setembro
+    ])
+    r = SV.absenteismo(con)
+    assert r["periodo"]["dias"] == 29
+    d1 = next(i for i in r["itens"] if i["divisao_codigo"] == "1")
+    assert d1["dias_afastados"] == 14 and d1["vinculos_afastados"] == 1
+    assert d1["percentual_dias_afastados"] == round(100 * 14 / (10 * 29), 2)
+    assert r["total"]["dias_afastados"] == 16 and r["total"]["vinculos"] == 15
+
+
+def test_serie_mensal_e_recorrentes(monkeypatch):
+    from afastamentos import servico as SV
+    monkeypatch.setenv("SIP_DATA_COPIA", "2026-09-29")
+    linhas = [_af("A", "1", D(2026, 8, 25), D(2026, 9, 5)),
+              _af("A", "1", D(2026, 3, 1), D(2026, 3, 3)), _af("A", "1", D(2026, 4, 1), D(2026, 4, 3)),
+              _af("A", "1", D(2026, 6, 1), D(2026, 6, 2)),
+              _af("B", "2", D(2026, 9, 10), D(2026, 9, 12), reduzido=168, causa="95")]
+    con = _ConexaoComDados([("m.DTINI < ?", linhas), ("m.DTINI >= ?", linhas)])
+    s = SV.serie_mensal(con, 2)
+    ago, setb = s["itens"]
+    assert ago["mes"] == "2026-08" and ago["dias_afastados"] == 7 and ago["vinculos_afastados_no_fim_do_mes"] == 1
+    assert setb["afastamentos_iniciados"] == 1 and setb["dias_afastados"] == 4 + 2 and setb["mes_incompleto"]
+    rec = SV.recorrentes(con, min_episodios=4)
+    assert rec["total"] == 1 and rec["itens"][0]["registro"] == "A" and rec["itens"][0]["episodios"] == 4
+    assert SV.recorrentes(con, min_episodios=1, somente_saude=False)["total"] == 2
+    a = rec["itens"][0]
+    # episódios: 25/08-05/09 (11 d), 01-03/03 (2 d), 01-03/04 (2 d), 01-02/06 (1 d) -> 16 dias em 2026
+    assert a["dias_afastado"] == 16 and a["fator_bradford"] == 4 * 4 * 16
+    assert a["episodios_curtos"] == 3 and a["maior_episodio_dias"] == 11
+
+
+def test_ordem_bradford_prioriza_faltas_frequentes():
+    assert K.fator_bradford(10, 10) > K.fator_bradford(2, 100)

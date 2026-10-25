@@ -366,3 +366,172 @@ def maternidade_sem_dependente(con, desde: date = C.DESDE_PADRAO, data_ref=None)
     return _resposta(ref, itens, desde=desde,
                      regra=f"Nenhum dependente do REGISTRO nascido entre {C.JANELA_NASCIMENTO_ANTES_DIAS} "
                            "dias antes do início da licença e o fim dela")
+
+
+# ==========================================================================
+# FASE 2 — linha do tempo, percentual por secretaria, recorrentes, gerencial
+# ==========================================================================
+def _por_registro(linhas) -> dict:
+    grupos: dict = defaultdict(list)
+    for l in linhas:
+        grupos[l["registro"]].append(l)
+    return grupos
+
+
+def serie_mensal(con, meses: int = C.MESES_SERIE_PADRAO, data_ref=None, divisao=None, reduzido=None) -> dict:
+    """Evolução mês a mês: afastamentos iniciados, vínculos afastados e dias afastados.
+
+    Considera vínculos de qualquer situação (quem foi desligado depois também entra
+    nos meses em que estava afastado).
+    """
+    ref = resolver_ref(con, data_ref)
+    janela = K.meses_ate(ref, meses)
+    inicio, fim = janela[0][0], janela[-1][1]
+    linhas = consultar(con, S.NA_JANELA_TODOS, (C.EMPRESA, fim, K.param_ainda_afastado(inicio)))
+    linhas = _filtrar(linhas, reduzido, divisao)
+    grupos = _por_registro(linhas)
+
+    itens = []
+    for ini_m, fim_m in janela:
+        ultimo_dia = fim_m - timedelta(days=1)
+        iniciados = sum(1 for l in linhas if ini_m <= l["dtini"] < fim_m)
+        afastados_no_mes = afastados_no_fim = dias = 0
+        for ls in grupos.values():
+            periodos = [(l["dtini"], l["dtfim"]) for l in ls]
+            d = K.dias_no_periodo(periodos, ini_m, fim_m)
+            if d:
+                afastados_no_mes += 1
+                dias += d
+            if any(K.afastado_no_dia(i, f, ultimo_dia) for i, f in periodos):
+                afastados_no_fim += 1
+        itens.append({
+            "mes": ini_m.strftime("%Y-%m"), "ate": ultimo_dia,
+            "mes_incompleto": fim_m.day != 1 or (fim_m - ini_m).days < 28,
+            "afastamentos_iniciados": iniciados,
+            "vinculos_afastados_no_mes": afastados_no_mes,
+            "vinculos_afastados_no_fim_do_mes": afastados_no_fim,
+            "dias_afastados": dias,
+        })
+    return {"data_referencia": ref, "meses": meses, "filtros": {"divisao": divisao, "reduzido": reduzido},
+            "itens": itens}
+
+
+def absenteismo(con, ano: int | None = None, mes: int | None = None, data_ref=None) -> dict:
+    """Dias afastados no mês e percentual por secretaria (dias afastados ÷ dias possíveis).
+
+    Denominador = vínculos ativos de hoje (o SIP não guarda o quadro mês a mês),
+    por isso o percentual é mais fiel para meses recentes.
+    """
+    ref = resolver_ref(con, data_ref)
+    ano, mes = ano or ref.year, mes or ref.month
+    inicio = date(ano, mes, 1)
+    fim = min(date(ano + (mes == 12), mes % 12 + 1, 1), ref + timedelta(days=1))
+    if fim <= inicio:
+        return {"data_referencia": ref, "periodo": {"inicio": inicio, "ate": None}, "total": None, "itens": []}
+    dias_periodo = (fim - inicio).days
+
+    linhas = consultar(con, S.NO_ANO, (C.EMPRESA, fim, K.param_ainda_afastado(inicio)))
+    vinculos = {str(v["divisao_codigo"]): v for v in consultar(con, S.VINCULOS_POR_DIVISAO, (C.EMPRESA,))}
+
+    por_div: dict = defaultdict(lambda: {"vinculos_afastados": 0, "dias_afastados": 0})
+    por_tipo: dict = defaultdict(int)
+    for registro, ls in _por_registro(linhas).items():
+        d = K.dias_no_periodo([(l["dtini"], l["dtfim"]) for l in ls], inicio, fim)
+        if not d:
+            continue
+        g = por_div[str(ls[0]["divisao_codigo"])]
+        g["vinculos_afastados"] += 1
+        g["dias_afastados"] += d
+        for l in ls:
+            por_tipo[(l["reduzido"], l["tipo"])] += K.dias_no_periodo([(l["dtini"], l["dtfim"])], inicio, fim)
+
+    def _linha(codigo, nome, qtd, g):
+        possiveis = qtd * dias_periodo
+        return {"divisao_codigo": codigo, "divisao": nome, "vinculos": qtd,
+                "vinculos_afastados": g["vinculos_afastados"], "dias_afastados": g["dias_afastados"],
+                "percentual_dias_afastados": round(100 * g["dias_afastados"] / possiveis, 2) if possiveis else None}
+
+    itens = [_linha(c, v["divisao"], v["vinculos"], por_div.get(c, {"vinculos_afastados": 0, "dias_afastados": 0}))
+             for c, v in vinculos.items()]
+    itens.sort(key=lambda i: -(i["percentual_dias_afastados"] or 0))
+    total_vinc = sum(v["vinculos"] for v in vinculos.values())
+    total = _linha(None, "Toda a Prefeitura", total_vinc, {
+        "vinculos_afastados": sum(g["vinculos_afastados"] for g in por_div.values()),
+        "dias_afastados": sum(g["dias_afastados"] for g in por_div.values())})
+    tipos = [{"reduzido": k[0], "tipo": k[1], "dias_afastados": v}
+             for k, v in sorted(por_tipo.items(), key=lambda x: -x[1])]
+    return {"data_referencia": ref, "periodo": {"inicio": inicio, "ate": fim - timedelta(days=1), "dias": dias_periodo},
+            "total": total, "itens": itens, "dias_por_tipo": tipos,
+            "observacao": "Percentual = dias afastados ÷ (vínculos ativos × dias do período). "
+                          "Afastamentos sobrepostos do mesmo vínculo contam uma vez."}
+
+
+def recorrentes(con, ano: int | None = None, min_episodios: int = C.RECORRENTES_MIN_PADRAO,
+                somente_saude: bool = True, data_ref=None, ordenar: str = "bradford") -> dict:
+    """Vínculos com muitos episódios de afastamento no ano.
+
+    Episódio = afastamentos emendados contam como um só (licença renovada não infla a conta).
+    Saúde = tipos cuja causa é acidente ou doença (CAUSAS 91 a 94); não usa CID.
+    Fator de Bradford = episódios² × dias afastados no ano: pesa mais quem falta
+    muitas vezes por pouco tempo do que quem teve um afastamento longo.
+    """
+    ref = resolver_ref(con, data_ref)
+    ano = ano or ref.year
+    inicio, fim = date(ano, 1, 1), min(date(ano + 1, 1, 1), ref + timedelta(days=1))
+    linhas = consultar(con, S.INICIADOS_NO_PERIODO, (C.EMPRESA, inicio, fim))
+    if somente_saude:
+        linhas = [l for l in linhas if str(l.get("causa") or "") in C.CAUSAS_SAUDE]
+
+    itens = []
+    for registro, ls in _por_registro(linhas).items():
+        eps = K.episodios([(l["dtini"], l["dtfim"]) for l in ls])
+        if len(eps) < min_episodios:
+            continue
+        p = ls[0]
+        tipos: dict = defaultdict(int)
+        for l in ls:
+            tipos[f'{l["reduzido"]} {l["tipo"]}'] += 1
+        dias = K.dias_no_periodo([(l["dtini"], l["dtfim"]) for l in ls], inicio, fim)
+        duracoes = [(f - i).days for i, f in eps]
+        itens.append({
+            "registro": registro, "matricula": p["matricula"], "nome": p["nome"], "cpf": p["cpf"],
+            "divisao": p["divisao"], "cargo": p["cargo"],
+            "episodios": len(eps), "lancamentos": len(ls), "dias_afastado": dias,
+            "fator_bradford": K.fator_bradford(len(eps), dias),
+            "episodios_curtos": sum(1 for d in duracoes if d <= C.EPISODIO_CURTO_DIAS),
+            "maior_episodio_dias": max(duracoes) if duracoes else 0,
+            "tipos": dict(sorted(tipos.items(), key=lambda x: -x[1])),
+            "lista_episodios": [{"inicio": i, "retorno": f, "dias": (f - i).days} for i, f in eps],
+        })
+    chave = {"bradford": lambda i: (-i["fator_bradford"], -i["episodios"]),
+             "episodios": lambda i: (-i["episodios"], -i["dias_afastado"]),
+             "dias": lambda i: (-i["dias_afastado"], -i["episodios"])}[ordenar]
+    itens.sort(key=chave)
+    return _resposta(ref, itens, ano=ano, min_episodios=min_episodios, somente_saude=somente_saude,
+                     ordenado_por=ordenar,
+                     legenda={"fator_bradford": "episódios² × dias afastados no ano",
+                              "episodios_curtos": f"episódios de até {C.EPISODIO_CURTO_DIAS} dias"})
+
+
+def gerencial(con, data_ref=None) -> dict:
+    """Resumo para o gabinete: só números, sem nomes, CPF ou CID."""
+    ref = resolver_ref(con, data_ref)
+    por_tipo = resumir_vigentes(con, ref, "tipo")
+    por_div = resumir_vigentes(con, ref, "divisao")
+    ret7 = listar_retornos(con, 7, ref)
+    longos_sem_rem = afastamentos_longos(con, C.DIAS_LONGO_PADRAO, True, ref)
+    tipos_problema = esocial_tipos_com_problema(con, date(ref.year, 1, 1))
+    esoc = esocial_resumo(con, date(ref.year, 1, 1))
+    return {
+        "data_referencia": ref,
+        "afastados_na_data": {"vinculos": por_tipo["total_vinculos"],
+                              "por_tipo": por_tipo["itens"][:10], "por_secretaria": por_div["itens"]},
+        "retornos_em_7_dias": {"total": ret7["total"],
+                               "emendam_outro_afastamento": sum(1 for i in ret7["itens"] if i["emenda_outro_afastamento"])},
+        "absenteismo_mes": absenteismo(con, data_ref=ref),
+        "linha_do_tempo": serie_mensal(con, C.MESES_SERIE_PADRAO, ref)["itens"],
+        "afastados_longos_sem_remuneracao": longos_sem_rem["total"],
+        "esocial_no_ano": {"totais": esoc["totais"],
+                           "tipos_sem_motivo": [{"reduzido": t["reduzido"], "tipo": t["tipo"],
+                                                 "lancamentos": t["lancamentos_desde"]} for t in tipos_problema["itens"]]},
+    }

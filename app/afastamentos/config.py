@@ -47,6 +47,11 @@ DIAS_TIPO_DESCONTINUADO = 365         # tipo sem lançamento novo há mais que i
 TOLERANCIA_EMENDA_DIAS = 1            # afastamentos separados por até 1 dia contam como contínuos
 CAUSA_SEM_REMUNERACAO = "97"          # [OK] CAUSAS 97 = afastamento sem vencimento
 
+CAUSAS_SAUDE = ("91", "92", "93", "94")  # [OK] CAUSAS: acidente típico, de trajeto, doença do trabalho, doença comum
+RECORRENTES_MIN_PADRAO = 4            # episódios de afastamento de saúde no ano
+EPISODIO_CURTO_DIAS = 2               # "falta curta" no alerta de recorrentes
+MESES_SERIE_PADRAO = 12               # linha do tempo mensal
+
 TIPOS_MATERNIDADE = (168, 226)        # [OK] licença maternidade / salário maternidade INSS
 TIPOS_PATERNIDADE = (10,)             # [OK] licença paternidade art. 109
 JANELA_NASCIMENTO_ANTES_DIAS = 120    # aceita filho nascido até 120 dias antes do início

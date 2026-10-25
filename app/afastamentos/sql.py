@@ -114,6 +114,29 @@ NO_ANO = select_base() + (
 )
 
 
+# 4c) Afastamentos que tocam uma janela, de QUALQUER situação do vínculo (linha do tempo histórica)
+# Parâmetros: empresa, fim_exclusivo, inicio_ainda_afastado
+NA_JANELA_TODOS = select_base() + (
+    f"WHERE m.EMPRESA = ? AND {temporario()} "
+    "AND m.DTINI < ? AND (m.DTFIM IS NULL OR m.DTFIM > ?)"
+)
+
+# 4d) Afastamentos iniciados num período, vínculos ativos — parâmetros: empresa, inicio, fim_exclusivo
+INICIADOS_NO_PERIODO = select_base() + (
+    f"WHERE m.EMPRESA = ? AND {temporario()} AND t.SITUACAO IN ({SIT_ATIVAS}) "
+    "AND m.DTINI >= ? AND m.DTINI < ?"
+)
+
+# 4e) Vínculos ativos por secretaria (denominador do percentual) — parâmetro: empresa
+VINCULOS_POR_DIVISAO = f"""
+SELECT d.CODIGO AS DIVISAO_CODIGO, d.NOME AS DIVISAO, COUNT(*) AS VINCULOS
+FROM TRABALHADOR t
+LEFT JOIN DIVISAO d ON d.EMPRESA = t.EMPRESA AND d.CODIGO = t.{_DIV}
+WHERE t.EMPRESA = ? AND t.SITUACAO IN ({SIT_ATIVAS})
+GROUP BY d.CODIGO, d.NOME
+"""
+
+
 # 4b) Períodos de afastamento de uma lista de registros (para afastamento contínuo)
 def periodos_dos_registros(qtd: int) -> str:
     marcadores = ", ".join("?" * qtd)
