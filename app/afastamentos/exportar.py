@@ -21,7 +21,7 @@ COLUNAS = {
                           ("sem_remuneracao", "Sem remuneração"), ("afastamentos_vigentes", "Afastamentos em curso")],
     "acumulado": SERVIDOR + [("dias_afastado", "Dias afastados no ano"), ("afastamentos", "Lançamentos"),
                              ("dias_por_tipo", "Dias por tipo")],
-    "recorrentes": SERVIDOR + [("fator_bradford", "Fator de Bradford"), ("episodios", "Episódios"),
+    "recorrentes": SERVIDOR + [("perfil", "Perfil"), ("fator_bradford", "Fator de Bradford"), ("episodios", "Episódios"),
                                ("episodios_curtos", "Episódios de até 2 dias"),
                                ("maior_episodio_dias", "Maior episódio (dias)"), ("lancamentos", "Lançamentos"),
                                ("dias_afastado", "Dias afastados no ano"), ("tipos", "Tipos")],

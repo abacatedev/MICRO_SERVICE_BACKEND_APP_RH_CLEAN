@@ -320,3 +320,10 @@ def test_serie_mensal_e_recorrentes(monkeypatch):
 
 def test_ordem_bradford_prioriza_faltas_frequentes():
     assert K.fator_bradford(10, 10) > K.fator_bradford(2, 100)
+
+
+def test_perfil_recorrencia():
+    assert K.perfil_recorrencia(22, 15, 42) == "frequente"
+    assert K.perfil_recorrencia(6, 0, 71) == "prolongado"
+    assert K.perfil_recorrencia(10, 7, 60) == "misto"
+    assert K.perfil_recorrencia(4, 1, 20) == "moderado"

@@ -50,6 +50,8 @@ CAUSA_SEM_REMUNERACAO = "97"          # [OK] CAUSAS 97 = afastamento sem vencime
 CAUSAS_SAUDE = ("91", "92", "93", "94")  # [OK] CAUSAS: acidente típico, de trajeto, doença do trabalho, doença comum
 RECORRENTES_MIN_PADRAO = 4            # episódios de afastamento de saúde no ano
 EPISODIO_CURTO_DIAS = 2               # "falta curta" no alerta de recorrentes
+PERFIL_FREQUENTE_PROPORCAO = 0.5      # metade ou mais dos episódios são curtos -> faltas frequentes
+PERFIL_PROLONGADO_DIAS = 60           # algum episódio com 60 dias ou mais -> afastamento prolongado
 MESES_SERIE_PADRAO = 12               # linha do tempo mensal
 
 TIPOS_MATERNIDADE = (168, 226)        # [OK] licença maternidade / salário maternidade INSS

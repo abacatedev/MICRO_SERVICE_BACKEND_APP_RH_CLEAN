@@ -120,6 +120,19 @@ def fator_bradford(episodios: int, dias: int) -> int:
     return episodios * episodios * dias
 
 
+def perfil_recorrencia(episodios: int, curtos: int, maior: int) -> str:
+    """frequente (muitas faltas curtas), prolongado (episódio longo), misto (os dois) ou moderado."""
+    frequente = episodios > 0 and curtos / episodios >= C.PERFIL_FREQUENTE_PROPORCAO
+    prolongado = maior >= C.PERFIL_PROLONGADO_DIAS
+    if frequente and prolongado:
+        return "misto"
+    if frequente:
+        return "frequente"
+    if prolongado:
+        return "prolongado"
+    return "moderado"
+
+
 def dias_sobrepostos(a_ini, a_fim, b_ini, b_fim, ref: date) -> int:
     limite = ref + timedelta(days=1)
     fa = fim_exclusivo(a_fim) or limite

@@ -467,7 +467,8 @@ def absenteismo(con, ano: int | None = None, mes: int | None = None, data_ref=No
 
 
 def recorrentes(con, ano: int | None = None, min_episodios: int = C.RECORRENTES_MIN_PADRAO,
-                somente_saude: bool = True, data_ref=None, ordenar: str = "bradford") -> dict:
+                somente_saude: bool = True, data_ref=None, ordenar: str = "bradford",
+                perfil: str | None = None) -> dict:
     """Vínculos com muitos episódios de afastamento no ano.
 
     Episódio = afastamentos emendados contam como um só (licença renovada não infla a conta).
@@ -500,6 +501,8 @@ def recorrentes(con, ano: int | None = None, min_episodios: int = C.RECORRENTES_
             "fator_bradford": K.fator_bradford(len(eps), dias),
             "episodios_curtos": sum(1 for d in duracoes if d <= C.EPISODIO_CURTO_DIAS),
             "maior_episodio_dias": max(duracoes) if duracoes else 0,
+            "perfil": K.perfil_recorrencia(len(eps), sum(1 for d in duracoes if d <= C.EPISODIO_CURTO_DIAS),
+                                           max(duracoes) if duracoes else 0),
             "tipos": dict(sorted(tipos.items(), key=lambda x: -x[1])),
             "lista_episodios": [{"inicio": i, "retorno": f, "dias": (f - i).days} for i, f in eps],
         })
@@ -507,10 +510,15 @@ def recorrentes(con, ano: int | None = None, min_episodios: int = C.RECORRENTES_
              "episodios": lambda i: (-i["episodios"], -i["dias_afastado"]),
              "dias": lambda i: (-i["dias_afastado"], -i["episodios"])}[ordenar]
     itens.sort(key=chave)
+    por_perfil = {p: sum(1 for i in itens if i["perfil"] == p) for p in ("frequente", "prolongado", "misto", "moderado")}
+    if perfil:
+        itens = [i for i in itens if i["perfil"] == perfil]
     return _resposta(ref, itens, ano=ano, min_episodios=min_episodios, somente_saude=somente_saude,
-                     ordenado_por=ordenar,
+                     ordenado_por=ordenar, perfil=perfil, total_por_perfil=por_perfil,
                      legenda={"fator_bradford": "episódios² × dias afastados no ano",
-                              "episodios_curtos": f"episódios de até {C.EPISODIO_CURTO_DIAS} dias"})
+                              "episodios_curtos": f"episódios de até {C.EPISODIO_CURTO_DIAS} dias",
+                              "perfil": f"frequente = metade ou mais dos episódios curtos; prolongado = algum episódio "
+                                        f"com {C.PERFIL_PROLONGADO_DIAS} dias ou mais; misto = os dois; moderado = nenhum"})
 
 
 def gerencial(con, data_ref=None) -> dict:

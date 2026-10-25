@@ -61,6 +61,13 @@ class OrdemRecorrentes(str, Enum):
     dias = "dias"
 
 
+class PerfilRecorrencia(str, Enum):
+    frequente = "frequente"
+    prolongado = "prolongado"
+    misto = "misto"
+    moderado = "moderado"
+
+
 class Regra(str, Enum):
     sobrepostos = "sobrepostos"
     sem_tipo = "sem-tipo"
@@ -201,8 +208,10 @@ def recorrentes(ano: int | None = Query(None, ge=2000, le=2100),
                 somente_saude: bool = True,
                 ordenar: OrdemRecorrentes = Query(OrdemRecorrentes.bradford,
                                                   description="bradford (episódios² × dias), episodios ou dias"),
+                perfil: PerfilRecorrencia | None = Query(None, description="frequente, prolongado, misto ou moderado"),
                 data_ref: date | None = DataRef, con=Depends(conexao)):
-    return SV.recorrentes(con, ano, min_episodios, somente_saude, data_ref, ordenar.value)
+    return SV.recorrentes(con, ano, min_episodios, somente_saude, data_ref, ordenar.value,
+                          perfil.value if perfil else None)
 
 
 # ---------------------------------------------------------------- gerencial

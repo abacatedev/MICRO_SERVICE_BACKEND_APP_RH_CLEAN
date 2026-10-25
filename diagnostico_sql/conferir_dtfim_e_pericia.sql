@@ -1,0 +1,80 @@
+-- ============================================================================
+-- Conferências de 25/10/2026 — SOMENTE LEITURA
+-- Parte A: convenção do DTFIM (dia do retorno ou último dia afastado?)
+-- Parte B: o módulo de perícia do SIP tem dados?
+-- Só traz contagens, datas e nomes de colunas: nenhum dado pessoal.
+-- ============================================================================
+
+-- A1) Afastamentos temporários desde 2025: quantos têm fim igual ao início?
+--     Se FIM_IGUAL_INICIO for zero ou quase zero, DTFIM é o dia do retorno.
+SELECT
+  SUM(IIF(m.DTFIM = m.DTINI, 1, 0))     AS FIM_IGUAL_INICIO,
+  SUM(IIF(m.DTFIM = m.DTINI + 1, 1, 0)) AS FIM_UM_DIA_DEPOIS,
+  SUM(IIF(m.DTFIM < m.DTINI, 1, 0))     AS FIM_ANTES_DO_INICIO,
+  SUM(IIF(m.DTFIM IS NULL, 1, 0))       AS SEM_FIM,
+  COUNT(*)                              AS TOTAL
+FROM MOVTOSEFIP m
+JOIN SEFIPREDUZIDO r ON r.EMPRESA = m.EMPRESA AND r.CODIGO = m.REDUZIDO
+WHERE m.EMPRESA = '001' AND r.SEFIPENT IS NOT NULL AND m.DTINI >= '2025-01-01';
+
+-- A2) As 10 diferenças (DTFIM - DTINI) mais comuns.
+--     Atestados costumam ser de 1, 2, 3, 5, 15 e 30 dias: se esses números
+--     aparecem como diferença, DTFIM é o dia do retorno; se aparecem 0, 1, 2, 4, 14 e 29,
+--     DTFIM é o último dia afastado.
+SELECT FIRST 10 m.DTFIM - m.DTINI AS DIFERENCA_DIAS, COUNT(*) AS QTD
+FROM MOVTOSEFIP m
+JOIN SEFIPREDUZIDO r ON r.EMPRESA = m.EMPRESA AND r.CODIGO = m.REDUZIDO
+WHERE m.EMPRESA = '001' AND r.SEFIPENT IS NOT NULL AND m.DTINI >= '2025-01-01'
+  AND m.DTFIM IS NOT NULL
+GROUP BY 1
+ORDER BY 2 DESC;
+
+-- A3) DTALTA em relação ao DTFIM (outra pista da convenção).
+SELECT
+  SUM(IIF(m.DTALTA = m.DTFIM, 1, 0))     AS ALTA_IGUAL_FIM,
+  SUM(IIF(m.DTALTA = m.DTFIM - 1, 1, 0)) AS ALTA_UM_DIA_ANTES_DO_FIM,
+  SUM(IIF(m.DTALTA IS NULL, 1, 0))       AS SEM_ALTA,
+  COUNT(*)                               AS TOTAL
+FROM MOVTOSEFIP m
+JOIN SEFIPREDUZIDO r ON r.EMPRESA = m.EMPRESA AND r.CODIGO = m.REDUZIDO
+WHERE m.EMPRESA = '001' AND r.SEFIPENT IS NOT NULL AND m.DTINI >= '2025-01-01';
+
+-- ----------------------------------------------------------------------------
+-- B1) Quantas linhas tem cada tabela do módulo de perícia
+SELECT 'PERICIA' AS TABELA, COUNT(*) AS LINHAS FROM PERICIA
+UNION ALL SELECT 'PERICIA_AGENDA', COUNT(*) FROM PERICIA_AGENDA
+UNION ALL SELECT 'PERICIA_AFASTAMENTO', COUNT(*) FROM PERICIA_AFASTAMENTO
+UNION ALL SELECT 'PERICIA_STATUS', COUNT(*) FROM PERICIA_STATUS
+UNION ALL SELECT 'PERICIA_RESPOSTA', COUNT(*) FROM PERICIA_RESPOSTA
+UNION ALL SELECT 'PERICIA_EXAME', COUNT(*) FROM PERICIA_EXAME
+UNION ALL SELECT 'JUNTA_MEDICA', COUNT(*) FROM JUNTA_MEDICA
+UNION ALL SELECT 'MEDICOS', COUNT(*) FROM MEDICOS
+UNION ALL SELECT 'MEDICOS (PERITO = S)', COUNT(*) FROM MEDICOS WHERE PERITO = 'S'
+UNION ALL SELECT 'SIPWEBSOLICITACAOAFASTAMENTO', COUNT(*) FROM SIPWEBSOLICITACAOAFASTAMENTO;
+
+-- B2) Colunas das tabelas de perícia (para a próxima rodada de consultas)
+SELECT TRIM(RDB$RELATION_NAME) AS TABELA, RDB$FIELD_POSITION AS POS, TRIM(RDB$FIELD_NAME) AS CAMPO
+FROM RDB$RELATION_FIELDS
+WHERE RDB$RELATION_NAME IN ('PERICIA', 'PERICIA_AGENDA', 'PERICIA_STATUS', 'PERICIA_RESPOSTA',
+                            'SIPWEBSOLICITACAOAFASTAMENTO')
+ORDER BY 1, 2;
+
+-- B3) Chaves e ligações dessas tabelas
+SELECT TRIM(rc.RDB$RELATION_NAME) AS TABELA, TRIM(rc.RDB$CONSTRAINT_TYPE) AS TIPO,
+       TRIM(s.RDB$FIELD_NAME) AS CAMPO, TRIM(rc2.RDB$RELATION_NAME) AS REFERENCIA
+FROM RDB$RELATION_CONSTRAINTS rc
+JOIN RDB$INDEX_SEGMENTS s ON s.RDB$INDEX_NAME = rc.RDB$INDEX_NAME
+LEFT JOIN RDB$REF_CONSTRAINTS ref ON ref.RDB$CONSTRAINT_NAME = rc.RDB$CONSTRAINT_NAME
+LEFT JOIN RDB$RELATION_CONSTRAINTS rc2 ON rc2.RDB$CONSTRAINT_NAME = ref.RDB$CONST_NAME_UQ
+WHERE rc.RDB$RELATION_NAME IN ('PERICIA', 'PERICIA_AGENDA', 'PERICIA_STATUS', 'PERICIA_RESPOSTA')
+  AND rc.RDB$CONSTRAINT_TYPE IN ('PRIMARY KEY', 'FOREIGN KEY')
+ORDER BY 1, 2, s.RDB$FIELD_POSITION;
+
+-- B4) Tabela de domínio dos status da perícia (não tem dado pessoal)
+SELECT * FROM PERICIA_STATUS;
+
+-- B5) Quantos afastamentos desde 2025 estão ligados a uma perícia
+SELECT COUNT(DISTINCT pa.AFASTAMENTO_ID) AS AFASTAMENTOS_COM_PERICIA
+FROM PERICIA_AFASTAMENTO pa
+JOIN MOVTOSEFIP m ON m.ITEM = pa.AFASTAMENTO_ID
+WHERE m.EMPRESA = '001' AND m.DTINI >= '2025-01-01';
