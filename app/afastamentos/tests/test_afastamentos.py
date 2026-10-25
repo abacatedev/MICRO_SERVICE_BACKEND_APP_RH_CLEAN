@@ -327,3 +327,21 @@ def test_perfil_recorrencia():
     assert K.perfil_recorrencia(6, 0, 71) == "prolongado"
     assert K.perfil_recorrencia(10, 7, 60) == "misto"
     assert K.perfil_recorrencia(4, 1, 20) == "moderado"
+
+
+def test_renovacao_longa_emenda_fim_de_semana_mas_atestado_curto_nao():
+    # licença de 30 dias renovada após 2 dias -> um episódio só, 60 dias reais
+    lic = [(D(2025, 1, 3), D(2025, 2, 2)), (D(2025, 2, 4), D(2025, 3, 6))]
+    eps = K.episodios(lic)
+    assert len(eps) == 1 and eps[0]["dias"] == 60 and eps[0]["lancamentos"] == 2
+    # sexta (14/02) e segunda (17/02): dois episódios curtos, o fim de semana não conta
+    ates = [(D(2025, 2, 14), D(2025, 2, 15)), (D(2025, 2, 17), D(2025, 2, 18))]
+    eps = K.episodios(ates)
+    assert len(eps) == 2 and [e["dias"] for e in eps] == [1, 1]
+    # intervalo de 1 dia continua emendando qualquer afastamento
+    assert len(K.episodios([(D(2025, 5, 1), D(2025, 5, 3)), (D(2025, 5, 4), D(2025, 5, 5))])) == 1
+
+
+def test_bloco_continuo_usa_regra_de_renovacao():
+    lic = [(D(2026, 6, 1), D(2026, 7, 1)), (D(2026, 7, 4), D(2026, 10, 1))]   # 3 dias de intervalo após 30 dias
+    assert K.inicio_bloco_continuo(lic, D(2026, 9, 29)) == D(2026, 6, 1)

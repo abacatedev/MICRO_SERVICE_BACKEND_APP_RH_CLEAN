@@ -44,7 +44,9 @@ DTFIM_E_DIA_DO_RETORNO = True
 DESDE_PADRAO = date(2025, 1, 1)       # início padrão das análises de lançamento/eSocial
 DIAS_LONGO_PADRAO = 60                # "afastamento longo"
 DIAS_TIPO_DESCONTINUADO = 365         # tipo sem lançamento novo há mais que isso
-TOLERANCIA_EMENDA_DIAS = 1            # afastamentos separados por até 1 dia contam como contínuos
+TOLERANCIA_EMENDA_DIAS = 1            # até 1 dia entre afastamentos: mesmo episódio
+TOLERANCIA_RENOVACAO_DIAS = 3         # até 3 dias (fim de semana) se o anterior durou RENOVACAO_MIN_DIAS ou mais
+RENOVACAO_MIN_DIAS = 15               # licença longa renovada
 CAUSA_SEM_REMUNERACAO = "97"          # [OK] CAUSAS 97 = afastamento sem vencimento
 
 CAUSAS_SAUDE = ("91", "92", "93", "94")  # [OK] CAUSAS: acidente típico, de trajeto, doença do trabalho, doença comum

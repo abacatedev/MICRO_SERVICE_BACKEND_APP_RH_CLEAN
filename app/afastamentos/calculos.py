@@ -70,19 +70,52 @@ def dias_no_periodo(lancamentos, inicio: date, fim_exc: date) -> int:
     return total_dias(unir_intervalos(pedacos))
 
 
+def agrupar_episodios(pedacos) -> list[dict]:
+    """Agrupa períodos [inicio, fim_exclusivo) em episódios.
+
+    Regra:
+    - intervalo de até TOLERANCIA_EMENDA_DIAS (1) entre dois afastamentos: mesmo episódio;
+    - intervalo de até TOLERANCIA_RENOVACAO_DIAS (3) quando o afastamento anterior durou
+      RENOVACAO_MIN_DIAS (15) dias ou mais: mesmo episódio (licença renovada depois de um fim de semana);
+    - atestados curtos separados por um fim de semana continuam sendo episódios diferentes.
+
+    Cada episódio traz `dias` = dias realmente afastados (sem contar os intervalos).
+    """
+    validos = sorted((i, f) for i, f in pedacos if i is not None and f is not None and f > i)
+    grupos: list[dict] = []
+    for ini, fim in validos:
+        if grupos:
+            g = grupos[-1]
+            intervalo = (ini - g["fim"]).days            # dias sem afastamento entre os dois
+            limite = (C.TOLERANCIA_RENOVACAO_DIAS if g["ultimo_dias"] >= C.RENOVACAO_MIN_DIAS
+                      else C.TOLERANCIA_EMENDA_DIAS)
+            if intervalo <= limite:
+                g["pedacos"].append((ini, fim))
+                g["fim"] = max(g["fim"], fim)
+                g["ultimo_dias"] = (fim - ini).days
+                continue
+        grupos.append({"inicio": ini, "fim": fim, "pedacos": [(ini, fim)], "ultimo_dias": (fim - ini).days})
+    return [{"inicio": g["inicio"], "retorno": g["fim"], "dias": total_dias(unir_intervalos(g["pedacos"])),
+             "lancamentos": len(g["pedacos"])} for g in grupos]
+
+
 def inicio_bloco_continuo(lancamentos, ref: date, tolerancia_dias: int | None = None) -> date | None:
     """Data em que começou o afastamento contínuo que contém `ref`.
 
     Afastamentos emendados (licença renovada, licença do município que vira
-    auxílio-doença do INSS etc.) contam como um só bloco.
+    auxílio-doença do INSS etc.) contam como um só bloco, pela regra de agrupar_episodios.
+    `tolerancia_dias` explícito usa uma tolerância única (compatibilidade).
     """
-    tol = C.TOLERANCIA_EMENDA_DIAS if tolerancia_dias is None else tolerancia_dias
     pedacos = []
     for dtini, dtfim in lancamentos:
         if dtini is None or dtini > ref:
             continue
         pedacos.append((dtini, fim_exclusivo(dtfim) or ref + timedelta(days=1)))
-    for ini, fim in unir_intervalos(pedacos, tol):
+    if tolerancia_dias is not None:
+        blocos = unir_intervalos(pedacos, tolerancia_dias)
+    else:
+        blocos = [(e["inicio"], e["retorno"]) for e in agrupar_episodios(pedacos)]
+    for ini, fim in blocos:
         if ini <= ref < fim:
             return ini
     return None
@@ -108,11 +141,10 @@ def afastado_no_dia(dtini: date, dtfim: date | None, dia: date) -> bool:
     return dtini <= dia and (fe is None or fe > dia)
 
 
-def episodios(lancamentos, tolerancia_dias: int | None = None) -> list[tuple[date, date]]:
-    """Agrupa lançamentos emendados num mesmo episódio (licença renovada conta uma vez)."""
-    tol = C.TOLERANCIA_EMENDA_DIAS if tolerancia_dias is None else tolerancia_dias
+def episodios(lancamentos) -> list[dict]:
+    """Episódios de afastamento a partir de (dtini, dtfim) do SIP (ver agrupar_episodios)."""
     pedacos = [(i, fim_exclusivo(f) or i + timedelta(days=1)) for i, f in lancamentos if i is not None]
-    return unir_intervalos(pedacos, tol)
+    return agrupar_episodios(pedacos)
 
 
 def fator_bradford(episodios: int, dias: int) -> int:

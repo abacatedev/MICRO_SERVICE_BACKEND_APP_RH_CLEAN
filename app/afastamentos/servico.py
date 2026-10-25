@@ -493,7 +493,7 @@ def recorrentes(con, ano: int | None = None, min_episodios: int = C.RECORRENTES_
         for l in ls:
             tipos[f'{l["reduzido"]} {l["tipo"]}'] += 1
         dias = K.dias_no_periodo([(l["dtini"], l["dtfim"]) for l in ls], inicio, fim)
-        duracoes = [(f - i).days for i, f in eps]
+        duracoes = [e["dias"] for e in eps]
         itens.append({
             "registro": registro, "matricula": p["matricula"], "nome": p["nome"], "cpf": p["cpf"],
             "divisao": p["divisao"], "cargo": p["cargo"],
@@ -504,7 +504,7 @@ def recorrentes(con, ano: int | None = None, min_episodios: int = C.RECORRENTES_
             "perfil": K.perfil_recorrencia(len(eps), sum(1 for d in duracoes if d <= C.EPISODIO_CURTO_DIAS),
                                            max(duracoes) if duracoes else 0),
             "tipos": dict(sorted(tipos.items(), key=lambda x: -x[1])),
-            "lista_episodios": [{"inicio": i, "retorno": f, "dias": (f - i).days} for i, f in eps],
+            "lista_episodios": eps,
         })
     chave = {"bradford": lambda i: (-i["fator_bradford"], -i["episodios"]),
              "episodios": lambda i: (-i["episodios"], -i["dias_afastado"]),
