@@ -20,6 +20,9 @@ from app.rh.faixas import router as rh_faixas_router
 
 from app.afastamentos.router import router as afastamentos_router
 
+from app.relatorios.router import router as relatorios_router
+
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -71,6 +74,8 @@ app.include_router(rh_admin_router)
 app.include_router(rh_diagnostico_router)
 app.include_router(rh_faixas_router)
 app.include_router(afastamentos_router)
+
+app.include_router(relatorios_router)
 
 @app.get("/", tags=["infra"])
 def health():
