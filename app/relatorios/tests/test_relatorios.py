@@ -482,7 +482,7 @@ def test_todos_os_relatorios_respondem_e_exportam(cliente, rid):
     assert r.status_code == 200, r.text
     corpo = r.json()
     assert corpo["relatorio"]["id"] == rid
-    for formato in ("csv", "xlsx"):
+    for formato in ("csv", "xlsx", "pdf"):
         e = cliente.get(f"/rh/relatorios/{rid}/exportar", params={**params, "formato": formato})
         assert e.status_code == 200, (formato, e.text)
 
@@ -534,3 +534,22 @@ def test_opcoes_contam_o_resultado_da_busca_e_dos_outros_filtros(cliente):
     assert {o["valor"]: o["total"] for o in r["opcoes"]["secretaria"]} == {"000003": 2}
     r = cliente.get("/rh/relatorios/afastamentos-vigentes?opcoes=false").json()
     assert r["opcoes"] == {} and r["total"] == 4
+
+
+def test_exportar_pdf(cliente):
+    como("rh")
+    e = cliente.get("/rh/relatorios/afastamentos-vigentes/exportar", params={"formato": "pdf", "q": "odenise"})
+    assert e.status_code == 200 and e.headers["content-type"] == "application/pdf"
+    assert e.content.startswith(b"%PDF")
+    from pypdf import PdfReader
+    texto = PdfReader(io.BytesIO(e.content)).pages[0].extract_text()
+    assert "Desenvolvimento — CTI Coordenadoria de Tecnologia da Informação" in texto
+    assert "ODENISE" in texto and "LGPD" in texto
+    assert AUDITORIA[-1]["detalhe"]["formato"] == "pdf"
+
+
+def test_pdf_grande_demais(cliente, monkeypatch):
+    from relatorios import exportar as EX
+    monkeypatch.setattr(EX, "PDF_MAX", 2)
+    como("rh")
+    assert cliente.get("/rh/relatorios/afastamentos-vigentes/exportar?formato=pdf").status_code == 422

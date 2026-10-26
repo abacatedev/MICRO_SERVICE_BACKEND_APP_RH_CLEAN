@@ -125,11 +125,11 @@ def consultar(
     return resultado
 
 
-@router.get("/{rid}/exportar", summary="Exportar um relatório (CSV ou Excel)")
+@router.get("/{rid}/exportar", summary="Exportar um relatório (CSV, Excel ou PDF)")
 def exportar(
     rid: RelatorioId,
     request: Request,
-    formato: str = Query("csv", pattern="^(csv|xlsx)$"),
+    formato: str = Query("csv", pattern="^(csv|xlsx|pdf)$"),
     q: str | None = Query(None, max_length=100),
     colunas: str | None = Query(None),
     agrupar: bool = Query(False),
@@ -140,7 +140,10 @@ def exportar(
 ):
     """Exporta exatamente o que a tela mostra (mesmos filtros, busca, colunas e ordem), sem paginar."""
     rel = _relatorio(rid, user)
-    resultado = _rodar(rel, user, request, q, colunas, agrupar, ordenar, direcao, 1, 1, True)
+    resultado = _rodar(rel, user, request, q, colunas, agrupar, ordenar, direcao, 1, 1, True)  # opções: nomes dos filtros no cabeçalho
+    if formato == "pdf" and resultado["total"] > EX.PDF_MAX:
+        raise HTTPException(422, f"O resultado tem {resultado['total']} linhas; para PDF o máximo é "
+                                 f"{EX.PDF_MAX}. Filtre mais ou exporte em Excel.")
     _auditar(db, request, user, "relatorios.exportar", rel, resultado,
              {"formato": formato, "colunas": [c["id"] for c in resultado["colunas"]]})
     nome = f"{rel.id}_{date.today().isoformat()}.{formato}"
@@ -150,6 +153,12 @@ def exportar(
         except RuntimeError as erro:
             raise HTTPException(501, str(erro)) from None
         tipo = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    elif formato == "pdf":
+        try:
+            conteudo = EX.para_pdf(resultado, descrever_filtros(rel, resultado), user.get("email"))
+        except RuntimeError as erro:
+            raise HTTPException(501, str(erro)) from None
+        tipo = "application/pdf"
     else:
         conteudo, tipo = EX.para_csv(resultado), "text/csv; charset=utf-8"
     return Response(conteudo, media_type=tipo,
